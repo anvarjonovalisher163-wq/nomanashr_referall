@@ -69,8 +69,10 @@ class AccessMiddleware(BaseMiddleware):
 
         is_admin = user.id in config.admin_ids or user.id in db.db_admins
         data["is_admin"] = is_admin
-        if is_admin:
+        # Sozlama o'chiq bo'lsa, do'st havola orqali botga kirishi bilanoq taklif sanaladi
+        if is_admin or not db.get_bool("ref_requires_sub"):
             await on_user_verified(bot, db, user.id)
+        if is_admin:
             return await handler(event, data)
 
         # 2) Bot holati

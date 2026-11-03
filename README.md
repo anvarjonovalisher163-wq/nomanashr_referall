@@ -6,8 +6,9 @@ Majburiy obuna + referal + random qozon + avtomatik g'olib aniqlash + to'liq adm
 
 1. Foydalanuvchi botga kiradi va **majburiy kanallarga obuna bo'ladi** (✅ Tekshirish tugmasi).
 2. «🔗 Taklif havolam» orqali shaxsiy havolasini oladi: `https://t.me/<bot>?start=<user_id>`.
-3. Do'sti shu havola orqali botga **birinchi marta** kirib, barcha kanallarga obuna bo'lgandagina
-   taklif **tasdiqlanadi** (soxta takliflarning oldi olinadi). Taklif qiluvchiga xabar boradi.
+3. Do'sti shu havola orqali botga **birinchi marta** kirishi bilan taklif sanaladi va taklif qiluvchiga xabar boradi.
+   Sozlamalarda «Taklif qilingan do'st ham kanallarga obuna bo'lishi shart» yoqilsa — taklif faqat do'st
+   barcha kanallarga obuna bo'lgach sanaladi (soxta takliflarga qarshi).
 4. **N ta** tasdiqlangan do'st taklif qilgan foydalanuvchi avtomatik ravishda **random qozonga** qo'shiladi.
 5. Belgilangan **sana va vaqtda** bot qozondan `random.SystemRandom` yordamida **n ta g'olibni** (o'rinlarsiz, teng) tanlaydi
    (ixtiyoriy: tanlashda g'olibning hali ham kanallarda ekanligi qayta tekshiriladi).

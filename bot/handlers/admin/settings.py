@@ -18,6 +18,7 @@ router.callback_query.filter(IsAdmin())
 
 TOGGLES = {
     "bot_enabled": "🤖 Bot ishlashi (foydalanuvchilar uchun)",
+    "ref_requires_sub": "👥 Taklif qilingan do'st ham kanallarga obuna bo'lishi shart",
     "check_sub_on_draw": "🔎 G'olibni tanlashda obunani qayta tekshirish",
     "announce_results": "📣 Natijalarni barcha foydalanuvchilarga e'lon qilish",
 }

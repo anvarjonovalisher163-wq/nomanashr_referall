@@ -68,6 +68,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "draw_at": "",
     "bot_enabled": "1",
     "check_sub_on_draw": "1",
+    # 0 — do'st havola orqali botga kirishi bilan taklif sanaladi; 1 — kanallarga obuna bo'lgach
+    "ref_requires_sub": "0",
     "announce_results": "1",
 }
 

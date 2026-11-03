@@ -61,9 +61,9 @@ _DEFS: list[TextDef] = [
         "ref_link_text",
         "Taklif havolasi xabari",
         "🔗 <b>Sizning shaxsiy taklif havolangiz:</b>\n<code>{link}</code>\n\n"
-        "Havolani do'stlaringizga yuboring. <b>{required}</b> ta do'stingiz botga kirib, "
-        "majburiy kanallarga obuna bo'lsa — siz random qozonga qo'shilasiz! 🎲",
-        placeholders=("link", "required"), rich=True),
+        "Havolani do'stlaringizga yuboring. <b>{required}</b> ta do'stingiz shu havola orqali "
+        "botga kirsa — siz random qozonga qo'shilasiz! 🎲\n\n{rule}",
+        placeholders=("link", "required", "rule"), rich=True),
     TextDef("share_text", "Ulashish matni", "Konkursda ishtirok et va sovg'a yut! 🎁", "plain"),
     TextDef(
         "ref_new",
@@ -85,9 +85,19 @@ _DEFS: list[TextDef] = [
         "🏆 G'oliblar soni: <b>{winners}</b> ta\n"
         "📅 G'oliblar aniqlanadigan sana: <b>{date}</b>\n\n"
         "{prize}\n\n"
-        "❗️ Taklif qilingan do'st botga birinchi marta kirgan va barcha majburiy kanallarga "
+        "{rule}",
+        placeholders=("status", "required", "winners", "date", "prize", "rule"), rich=True),
+    TextDef(
+        "rule_no_sub",
+        "Shart: faqat havola orqali kirish",
+        "❗️ Do'stingiz botga havolangiz orqali birinchi marta kirgan bo'lishi kerak.",
+    ),
+    TextDef(
+        "rule_with_sub",
+        "Shart: kirish + kanallarga obuna",
+        "❗️ Do'stingiz botga havolangiz orqali birinchi marta kirgan va barcha majburiy kanallarga "
         "obuna bo'lgan bo'lishi kerak.",
-        placeholders=("status", "required", "winners", "date", "prize"), rich=True),
+    ),
     TextDef("state_active", "Konkurs holati: faol", "🟢 Faol"),
     TextDef("state_inactive", "Konkurs holati: faol emas", "⏸ Faol emas"),
     TextDef("state_drawn", "Konkurs holati: yakunlangan", "🏁 Yakunlangan"),
@@ -144,3 +154,8 @@ def is_custom(db: Database, key: str) -> bool:
 def strip_html(text: str) -> str:
     """HTML teglarni olib tashlaydi (alert oynalari uchun)."""
     return html.unescape(re.sub(r"<[^>]+>", "", text))
+
+
+def ref_rule(db: Database) -> str:
+    """Taklif qachon sanalishi haqidagi shart (sozlamaga qarab)."""
+    return get(db, "rule_with_sub" if db.get_bool("ref_requires_sub") else "rule_no_sub")

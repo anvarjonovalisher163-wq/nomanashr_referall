@@ -98,7 +98,7 @@ async def my_link(message: Message, bot: Bot, db: Database, bot_username: str) -
     )
     await send_rich(
         bot, message.chat.id, db, "ref_link_text", reply_markup=kb,
-        link=link, required=db.get_int("required_refs"),
+        link=link, required=db.get_int("required_refs"), rule=texts.ref_rule(db),
     )
 
 
@@ -114,6 +114,7 @@ async def about(message: Message, bot: Bot, db: Database, config: Config) -> Non
         winners=db.get_int("winners_count"),
         date=draw_at_text(db, config),
         prize=texts.get(db, "prize_text"),
+        rule=texts.ref_rule(db),
     )
 
 
