@@ -1,7 +1,6 @@
 """Foydalanuvchini ro'yxatga olish, bot holati va majburiy obunani tekshirish."""
 from __future__ import annotations
 
-import html
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware, Bot
@@ -91,9 +90,6 @@ class AccessMiddleware(BaseMiddleware):
         if missing:
             if isinstance(event, CallbackQuery):
                 await event.answer(texts.get(db, "sub_alert_required"), show_alert=True)
-            elif (event.text or "").startswith("/start"):
-                # /start: avval salomlashuv, so'ng darhol majburiy kanallar
-                await send_rich(bot, user.id, db, "welcome_text", name=html.escape(user.full_name))
             await send_rich(bot, user.id, db, "sub_prompt", reply_markup=subscribe_kb(db, missing))
             return None
 
