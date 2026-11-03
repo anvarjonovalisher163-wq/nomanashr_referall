@@ -37,7 +37,12 @@ async def is_member(bot: Bot, chat_id: int, user_id: int, use_cache: bool = True
     # "restricted" holatida is_member=False bo'lishi mumkin
     if member.status == ChatMemberStatus.RESTRICTED and not getattr(member, "is_member", True):
         return False
-    _cache[key] = time.monotonic()
+    now = time.monotonic()
+    if len(_cache) > 20_000:
+        # Eskirgan yozuvlarni tozalash — kesh cheksiz o'smasin
+        for k in [k for k, t in _cache.items() if now - t >= _CACHE_TTL]:
+            _cache.pop(k, None)
+    _cache[key] = now
     return True
 
 
