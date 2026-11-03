@@ -23,11 +23,10 @@ def ikb(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
 
 def main_menu(db: Database, is_admin: bool = False) -> ReplyKeyboardMarkup:
     label = lambda key: KeyboardButton(text=texts.get(db, key))  # noqa: E731
-    rows = [
-        [label("btn_ref"), label("btn_stats")],
-        [label("btn_top"), label("btn_about")],
-        [label("btn_winners")],
-    ]
+    rows = [[label("btn_ref"), label("btn_about")]]
+    # "G'oliblar" tugmasi faqat konkurs yakunlangandan keyin ko'rinadi
+    if db.get_bool("contest_drawn"):
+        rows.append([label("btn_winners")])
     if is_admin:
         rows.append([KeyboardButton(text=ADMIN_BUTTON)])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)

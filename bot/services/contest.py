@@ -13,6 +13,7 @@ from aiogram.exceptions import TelegramAPIError
 from bot import texts
 from bot.config import Config
 from bot.db import Database
+from bot.keyboards import main_menu
 from bot.services import subscription
 from bot.services.broadcast import broadcast_text
 
@@ -126,21 +127,27 @@ async def _announce(
     result_text = await winners_text(db, contest_id)
     result_text += "\n\n" + texts.render(db, "results_footer", pool=pool_size)
 
+    # Konkurs yakunlandi — foydalanuvchilarga "G'oliblar" tugmasi bor yangi menyu yuboriladi
+    admins = config.admin_ids | db.db_admins
     winner_dm = texts.render(db, "winner_dm", prize=texts.get(db, "prize_text"))
     for uid in winners:
         try:
-            await bot.send_message(uid, winner_dm)
+            await bot.send_message(uid, winner_dm, reply_markup=main_menu(db, uid in admins))
         except TelegramAPIError:
             pass
 
-    for admin_id in config.admin_ids | db.db_admins:
+    for admin_id in admins:
         try:
-            await bot.send_message(admin_id, "🔔 <b>G'oliblar aniqlandi</b>\n\n" + result_text)
+            await bot.send_message(
+                admin_id, "🔔 <b>G'oliblar aniqlandi</b>\n\n" + result_text, reply_markup=main_menu(db, True)
+            )
         except TelegramAPIError:
             pass
 
     if db.get_bool("announce_results"):
-        await broadcast_text(bot, db, result_text, exclude=set(winners))
+        await broadcast_text(
+            bot, db, result_text, exclude=set(winners) | admins, reply_markup=main_menu(db, False)
+        )
 
 
 async def scheduler_loop(bot: Bot, db: Database, config: Config, interval: int = 20) -> None:

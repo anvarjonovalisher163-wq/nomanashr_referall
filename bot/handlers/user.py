@@ -14,7 +14,7 @@ from bot.db import Database
 from bot.keyboards import main_menu, subscribe_kb
 from bot.services import subscription
 from bot.services.buttons import ref_link, share_url
-from bot.services.contest import draw_at_text, on_user_verified, user_mention, winners_text
+from bot.services.contest import draw_at_text, on_user_verified, winners_text
 
 router = Router(name="user")
 
@@ -94,41 +94,6 @@ async def my_link(message: Message, db: Database, bot_username: str) -> None:
     )
 
 
-@router.message(MenuButton("btn_stats"))
-async def my_stats(message: Message, db: Database, config: Config) -> None:
-    count = await db.ref_count(message.from_user.id)
-    required = db.get_int("required_refs")
-    if db.get_bool("contest_drawn"):
-        status = texts.get(db, "status_drawn")
-    elif not db.get_bool("contest_active"):
-        status = texts.get(db, "status_inactive")
-    elif count >= required:
-        status = texts.get(db, "status_in_pool")
-    else:
-        status = texts.render(db, "status_need", left=required - count)
-    await message.answer(
-        texts.render(
-            db, "stats_text", count=count, required=required, status=status, date=draw_at_text(db, config)
-        )
-    )
-
-
-@router.message(MenuButton("btn_top"))
-async def top(message: Message, db: Database) -> None:
-    rows = await db.top(db.contest_id, 10)
-    if not rows:
-        await message.answer(texts.get(db, "top_empty"))
-        return
-    lines = [
-        texts.render(db, "top_line", n=i, user=user_mention(r["user_id"], r["full_name"]), count=r["cnt"])
-        for i, r in enumerate(rows, start=1)
-    ]
-    my = await db.ref_count(message.from_user.id)
-    await message.answer(
-        texts.get(db, "top_header") + "\n\n" + "\n".join(lines) + "\n\n" + texts.render(db, "top_footer", count=my)
-    )
-
-
 @router.message(MenuButton("btn_about"))
 async def about(message: Message, db: Database, config: Config) -> None:
     await message.answer(
@@ -145,9 +110,10 @@ async def about(message: Message, db: Database, config: Config) -> None:
 
 
 @router.message(MenuButton("btn_winners"))
-async def winners(message: Message, db: Database) -> None:
+async def winners(message: Message, db: Database, is_admin: bool) -> None:
     if not db.get_bool("contest_drawn"):
-        await message.answer(texts.get(db, "winners_not_yet"))
+        # Eski klaviaturada qolgan tugma bosilsa — menyuni yangilab yuboramiz
+        await message.answer(texts.get(db, "winners_not_yet"), reply_markup=main_menu(db, is_admin))
         return
     await message.answer(await winners_text(db, db.contest_id))
 

@@ -31,8 +31,6 @@ class TextDef:
 _DEFS: list[TextDef] = [
     # ------------------------------------------------------------ menyu tugmalari
     TextDef("btn_ref", "Tugma: taklif havolasi", "🔗 Taklif havolam", "button"),
-    TextDef("btn_stats", "Tugma: mening natijam", "📊 Mening natijam", "button"),
-    TextDef("btn_top", "Tugma: reyting", "🏆 Reyting", "button"),
     TextDef("btn_about", "Tugma: konkurs haqida", "ℹ️ Konkurs haqida", "button"),
     TextDef("btn_winners", "Tugma: g'oliblar", "🎁 G'oliblar", "button"),
     TextDef("btn_channel", "Tugma: kanalga obuna", "➕ {title}", "button", ("title",)),
@@ -80,30 +78,6 @@ _DEFS: list[TextDef] = [
         "Qozonga qo'shilganda",
         "✅ Tabriklaymiz! Siz <b>random qozonga</b> qo'shildingiz. G'oliblar belgilangan sanada tasodifiy tanlanadi. 🍀",
     ),
-    # ------------------------------------------------------------- mening natijam
-    TextDef(
-        "stats_text",
-        "Mening natijam",
-        "📊 <b>Sizning natijangiz</b>\n\n"
-        "👥 Tasdiqlangan takliflar: <b>{count}</b> / {required}\n"
-        "{status}\n\n"
-        "📅 G'oliblar aniqlanadigan sana: <b>{date}</b>",
-        placeholders=("count", "required", "status", "date"),
-    ),
-    TextDef("status_in_pool", "Holat: qozonda", "✅ Siz random qozondasiz!"),
-    TextDef(
-        "status_need", "Holat: yana kerak",
-        "⏳ Qozonga kirish uchun yana <b>{left}</b> ta do'st taklif qiling", placeholders=("left",),
-    ),
-    TextDef("status_inactive", "Holat: konkurs faol emas", "⏸ Konkurs hozircha faol emas"),
-    TextDef("status_drawn", "Holat: konkurs yakunlangan", "🏁 Konkurs yakunlangan"),
-    # ------------------------------------------------------------------ reyting
-    TextDef("top_header", "Reyting sarlavhasi", "🏆 <b>Eng faol ishtirokchilar (TOP-10):</b>"),
-    TextDef(
-        "top_line", "Reyting qatori", "{n}. {user} — <b>{count}</b> ta", placeholders=("n", "user", "count"),
-    ),
-    TextDef("top_footer", "Reyting oxiri", "Sizda: <b>{count}</b> ta", placeholders=("count",)),
-    TextDef("top_empty", "Reyting bo'sh", "🏆 Hozircha reyting bo'sh. Birinchi bo'ling! 🚀"),
     # ------------------------------------------------------------- konkurs haqida
     TextDef(
         "about_text",
@@ -146,7 +120,7 @@ _DEFS: list[TextDef] = [
 
 TEXTS: dict[str, TextDef] = {d.key: d for d in _DEFS}
 ORDER: list[str] = [d.key for d in _DEFS]
-MENU_BUTTONS = ("btn_ref", "btn_stats", "btn_top", "btn_about", "btn_winners")
+MENU_BUTTONS = ("btn_ref", "btn_about", "btn_winners")
 
 
 def get(db: Database, key: str) -> str:

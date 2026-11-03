@@ -18,10 +18,10 @@ Majburiy obuna + referal + random qozon + avtomatik g'olib aniqlash + to'liq adm
 | Tugma | Vazifasi |
 |---|---|
 | 🔗 Taklif havolam | Shaxsiy havola + «Do'stlarga ulashish» tugmasi |
-| 📊 Mening natijam | Tasdiqlangan takliflar soni, qozondami yoki yo'q |
-| 🏆 Reyting | TOP-10 taklif qiluvchilar |
 | ℹ️ Konkurs haqida | Shartlar, sovg'alar, sana |
-| 🎁 G'oliblar | Aniqlangan g'oliblar ro'yxati |
+| 🎁 G'oliblar | Faqat konkurs yakunlangandan keyin ko'rinadi |
+
+Foydalanuvchi har bir yangi do'sti qo'shilganda «Takliflaringiz: 3/5» kabi xabar oladi.
 
 ## Admin panel (`/admin` yoki «⚙️ Admin panel»)
 
