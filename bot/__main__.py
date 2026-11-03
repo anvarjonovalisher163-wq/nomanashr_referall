@@ -14,6 +14,7 @@ from bot.config import load_config
 from bot.db import Database
 from bot.handlers import setup_routers
 from bot.middlewares import AccessMiddleware
+from bot.services import rich
 from bot.services.contest import scheduler_loop
 
 
@@ -27,6 +28,7 @@ async def main() -> None:
 
     bot = Bot(config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     me = await bot.get_me()
+    rich.BOT_USERNAME = me.username or ""
 
     dp = Dispatcher(storage=MemoryStorage())
     dp["config"] = config

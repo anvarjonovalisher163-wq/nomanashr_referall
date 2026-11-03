@@ -26,6 +26,7 @@ class TextDef:
     default: str
     kind: str = "html"
     placeholders: tuple[str, ...] = ()
+    rich: bool = False  # alohida xabar sifatida yuboriladi — media va tugma biriktirish mumkin
 
 
 _DEFS: list[TextDef] = [
@@ -44,16 +45,14 @@ _DEFS: list[TextDef] = [
         "Do'stlaringizni taklif qiling va konkursda ishtirok eting. "
         "Belgilangan miqdordagi do'stni taklif qilganlar random qozonga qo'shiladi, "
         "g'oliblar esa belgilangan sanada tasodifiy tanlanadi. 🍀",
-        placeholders=("name",),
-    ),
-    TextDef("menu_hint", "Noma'lum xabarga javob", "👇 Quyidagi menyudan foydalaning."),
-    TextDef("bot_disabled", "Bot o'chirilganda", "🛠 Bot vaqtincha texnik ishlar sababli to'xtatilgan. Keyinroq urinib ko'ring."),
+        placeholders=("name",), rich=True),
+    TextDef("menu_hint", "Noma'lum xabarga javob", "👇 Quyidagi menyudan foydalaning.", rich=True),
+    TextDef("bot_disabled", "Bot o'chirilganda", "🛠 Bot vaqtincha texnik ishlar sababli to'xtatilgan. Keyinroq urinib ko'ring.", rich=True),
     # ------------------------------------------------------------------- obuna
     TextDef(
         "sub_prompt",
         "Obuna bo'lish talabi",
-        "❗️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling, so'ng «✅ Tekshirish» tugmasini bosing:",
-    ),
+        "❗️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling, so'ng «✅ Tekshirish» tugmasini bosing:", rich=True),
     TextDef("sub_alert_required", "Oyna: avval obuna bo'ling", "Avval kanallarga obuna bo'ling!", "alert"),
     TextDef("sub_alert_not_subscribed", "Oyna: obuna to'liq emas", "❌ Siz hali barcha kanallarga obuna bo'lmadingiz!", "alert"),
     TextDef("sub_alert_confirmed", "Oyna: obuna tasdiqlandi", "✅ Rahmat! Obuna tasdiqlandi.", "alert"),
@@ -64,15 +63,13 @@ _DEFS: list[TextDef] = [
         "🔗 <b>Sizning shaxsiy taklif havolangiz:</b>\n<code>{link}</code>\n\n"
         "Havolani do'stlaringizga yuboring. <b>{required}</b> ta do'stingiz botga kirib, "
         "majburiy kanallarga obuna bo'lsa — siz random qozonga qo'shilasiz! 🎲",
-        placeholders=("link", "required"),
-    ),
+        placeholders=("link", "required"), rich=True),
     TextDef("share_text", "Ulashish matni", "Konkursda ishtirok et va sovg'a yut! 🎁", "plain"),
     TextDef(
         "ref_new",
         "Yangi do'st qo'shilganda",
         "🎉 Sizning havolangiz orqali <b>{name}</b> botga qo'shildi!\n👥 Takliflaringiz: <b>{count}/{required}</b>",
-        placeholders=("name", "count", "required"),
-    ),
+        placeholders=("name", "count", "required"), rich=True),
     TextDef(
         "ref_pool_joined",
         "Qozonga qo'shilganda",
@@ -90,16 +87,15 @@ _DEFS: list[TextDef] = [
         "{prize}\n\n"
         "❗️ Taklif qilingan do'st botga birinchi marta kirgan va barcha majburiy kanallarga "
         "obuna bo'lgan bo'lishi kerak.",
-        placeholders=("status", "required", "winners", "date", "prize"),
-    ),
+        placeholders=("status", "required", "winners", "date", "prize"), rich=True),
     TextDef("state_active", "Konkurs holati: faol", "🟢 Faol"),
     TextDef("state_inactive", "Konkurs holati: faol emas", "⏸ Faol emas"),
     TextDef("state_drawn", "Konkurs holati: yakunlangan", "🏁 Yakunlangan"),
     TextDef("date_not_set", "Sana belgilanmagan", "belgilanmagan", "plain"),
     TextDef("prize_text", "Sovg'alar matni", "🎁 Sovg'alar haqida ma'lumot tez orada e'lon qilinadi."),
     # ---------------------------------------------------------------- g'oliblar
-    TextDef("winners_not_yet", "G'oliblar hali aniqlanmagan", "⏳ G'oliblar hali aniqlanmagan."),
-    TextDef("winners_header", "G'oliblar sarlavhasi", "🏆 <b>Konkurs g'oliblari:</b>"),
+    TextDef("winners_not_yet", "G'oliblar hali aniqlanmagan", "⏳ G'oliblar hali aniqlanmagan.", rich=True),
+    TextDef("winners_header", "G'oliblar sarlavhasi", "🏆 <b>Konkurs g'oliblari:</b>", rich=True),
     TextDef("winner_line", "G'olib qatori", "🎉 {user}", placeholders=("user",)),
     TextDef(
         "winners_none", "G'olib yo'q",
@@ -114,8 +110,7 @@ _DEFS: list[TextDef] = [
         "G'olibga xabar",
         "🎉 <b>Tabriklaymiz!</b> Siz konkurs g'oliblaridan biri bo'ldingiz!\n\n{prize}\n\n"
         "Tez orada admin siz bilan bog'lanadi.",
-        placeholders=("prize",),
-    ),
+        placeholders=("prize",), rich=True),
 ]
 
 TEXTS: dict[str, TextDef] = {d.key: d for d in _DEFS}
@@ -141,7 +136,9 @@ def render(db: Database, key: str, **values: object) -> str:
 
 def is_custom(db: Database, key: str) -> bool:
     value = db.get(key)
-    return bool(value) and value != TEXTS[key].default
+    return (bool(value) and value != TEXTS[key].default) or bool(
+        db.get(f"{key}__media") or db.get(f"{key}__buttons")
+    )
 
 
 def strip_html(text: str) -> str:

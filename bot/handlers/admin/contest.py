@@ -8,14 +8,14 @@ from datetime import datetime
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 
 from bot import texts
 from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import AdminStates, IsAdmin, show
 from bot.keyboards import cancel_kb, ikb
-from bot.services.contest import DATE_FORMAT, draw_at_text, parse_date, run_draw, winners_text
+from bot.services.contest import DATE_FORMAT, admin_winners_message, draw_at_text, parse_date, run_draw
 
 router = Router(name="admin_contest")
 router.message.filter(IsAdmin())
@@ -183,7 +183,9 @@ async def export_pool(call: CallbackQuery, db: Database) -> None:
 
 @router.callback_query(F.data == "ct:winners")
 async def show_winners(call: CallbackQuery, db: Database) -> None:
-    await show(call, await winners_text(db, db.contest_id), ikb([[("⬅️ Orqaga", "adm:contest")]]))
+    text, kb = await admin_winners_message(db, db.contest_id, len(await db.pool(db.contest_id, db.get_int("required_refs"))))
+    rows = (kb.inline_keyboard if kb else []) + ikb([[("⬅️ Orqaga", "adm:contest")]]).inline_keyboard
+    await show(call, text, InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @router.callback_query(F.data == "ct:draw")

@@ -14,6 +14,7 @@ from bot.db import Database
 from bot.keyboards import main_menu, subscribe_kb
 from bot.services import subscription
 from bot.services.buttons import ref_link, share_url
+from bot.services.rich import send_rich
 from bot.services.contest import draw_at_text, on_user_verified, winners_text
 
 router = Router(name="user")
@@ -32,9 +33,8 @@ class MenuButton(Filter):
         )
 
 
-async def send_welcome(message: Message, db: Database, is_admin: bool, name: str) -> None:
-    text = texts.render(db, "welcome_text", name=html.escape(name))
-    await message.answer(text, reply_markup=main_menu(db, is_admin))
+async def send_welcome(bot: Bot, chat_id: int, db: Database, is_admin: bool, name: str) -> None:
+    await send_rich(bot, chat_id, db, "welcome_text", reply_markup=main_menu(db, is_admin), name=html.escape(name))
 
 
 def contest_state(db: Database) -> str:
@@ -46,8 +46,8 @@ def contest_state(db: Database) -> str:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, db: Database, is_admin: bool) -> None:
-    await send_welcome(message, db, is_admin, message.from_user.full_name)
+async def cmd_start(message: Message, bot: Bot, db: Database, is_admin: bool) -> None:
+    await send_welcome(bot, message.chat.id, db, is_admin, message.from_user.full_name)
 
 
 @router.callback_query(F.data == "check_sub")
@@ -67,7 +67,7 @@ async def check_sub(call: CallbackQuery, bot: Bot, db: Database, is_admin: bool)
     except Exception:  # noqa: BLE001
         pass
     await on_user_verified(bot, db, call.from_user.id)
-    await send_welcome(call.message, db, is_admin, call.from_user.full_name)
+    await send_welcome(bot, call.from_user.id, db, is_admin, call.from_user.full_name)
 
 
 @router.callback_query(F.data.startswith("alert:"))
@@ -78,7 +78,7 @@ async def alert_button(call: CallbackQuery, db: Database) -> None:
 
 
 @router.message(MenuButton("btn_ref"))
-async def my_link(message: Message, db: Database, bot_username: str) -> None:
+async def my_link(message: Message, bot: Bot, db: Database, bot_username: str) -> None:
     link = ref_link(bot_username, message.from_user.id)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[
@@ -88,37 +88,37 @@ async def my_link(message: Message, db: Database, bot_username: str) -> None:
             )
         ]]
     )
-    await message.answer(
-        texts.render(db, "ref_link_text", link=link, required=db.get_int("required_refs")),
-        reply_markup=kb,
+    await send_rich(
+        bot, message.chat.id, db, "ref_link_text", reply_markup=kb,
+        link=link, required=db.get_int("required_refs"),
     )
 
 
 @router.message(MenuButton("btn_about"))
-async def about(message: Message, db: Database, config: Config) -> None:
-    await message.answer(
-        texts.render(
-            db,
-            "about_text",
-            status=contest_state(db),
-            required=db.get_int("required_refs"),
-            winners=db.get_int("winners_count"),
-            date=draw_at_text(db, config),
-            prize=texts.get(db, "prize_text"),
-        )
+async def about(message: Message, bot: Bot, db: Database, config: Config) -> None:
+    await send_rich(
+        bot,
+        message.chat.id,
+        db,
+        "about_text",
+        status=contest_state(db),
+        required=db.get_int("required_refs"),
+        winners=db.get_int("winners_count"),
+        date=draw_at_text(db, config),
+        prize=texts.get(db, "prize_text"),
     )
 
 
 @router.message(MenuButton("btn_winners"))
-async def winners(message: Message, db: Database, is_admin: bool) -> None:
+async def winners(message: Message, bot: Bot, db: Database, is_admin: bool) -> None:
     if not db.get_bool("contest_drawn"):
         # Eski klaviaturada qolgan tugma bosilsa — menyuni yangilab yuboramiz
-        await message.answer(texts.get(db, "winners_not_yet"), reply_markup=main_menu(db, is_admin))
+        await send_rich(bot, message.chat.id, db, "winners_not_yet", reply_markup=main_menu(db, is_admin))
         return
-    await message.answer(await winners_text(db, db.contest_id))
+    await send_rich(bot, message.chat.id, db, "winners_header", text=await winners_text(db, db.contest_id))
 
 
 @router.message()
-async def fallback(message: Message, db: Database, is_admin: bool) -> None:
+async def fallback(message: Message, bot: Bot, db: Database, is_admin: bool) -> None:
     """Noma'lum xabar: menyuni (yangilangan tugma yozuvlari bilan) qayta yuboradi."""
-    await message.answer(texts.get(db, "menu_hint"), reply_markup=main_menu(db, is_admin))
+    await send_rich(bot, message.chat.id, db, "menu_hint", reply_markup=main_menu(db, is_admin))

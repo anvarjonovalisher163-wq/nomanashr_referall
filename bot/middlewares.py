@@ -13,6 +13,7 @@ from bot.db import Database
 from bot.keyboards import subscribe_kb
 from bot.services import subscription
 from bot.services.contest import on_user_verified
+from bot.services.rich import send_rich
 
 # Obuna tekshiruvisiz ishlaydigan callbacklar
 _FREE_CALLBACKS = ("check_sub", "alert:")
@@ -78,7 +79,7 @@ class AccessMiddleware(BaseMiddleware):
             if isinstance(event, CallbackQuery):
                 await event.answer(texts.strip_html(text)[:200], show_alert=True)
             else:
-                await event.answer(text)
+                await send_rich(bot, user.id, db, "bot_disabled")
             return None
 
         if isinstance(event, CallbackQuery) and (event.data or "").startswith(_FREE_CALLBACKS):
@@ -87,13 +88,9 @@ class AccessMiddleware(BaseMiddleware):
         # 3) Majburiy obuna
         missing = await subscription.unsubscribed_channels(bot, db, user.id)
         if missing:
-            text = texts.get(db, "sub_prompt")
             if isinstance(event, CallbackQuery):
                 await event.answer(texts.get(db, "sub_alert_required"), show_alert=True)
-                if event.message:
-                    await event.message.answer(text, reply_markup=subscribe_kb(db, missing))
-            else:
-                await event.answer(text, reply_markup=subscribe_kb(db, missing))
+            await send_rich(bot, user.id, db, "sub_prompt", reply_markup=subscribe_kb(db, missing))
             return None
 
         await on_user_verified(bot, db, user.id)

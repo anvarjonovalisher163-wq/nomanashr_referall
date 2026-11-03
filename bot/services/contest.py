@@ -9,11 +9,13 @@ from datetime import datetime
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot import texts
 from bot.config import Config
 from bot.db import Database
 from bot.keyboards import main_menu
+from bot.services.rich import send_rich
 from bot.services import subscription
 from bot.services.broadcast import broadcast_text
 
@@ -71,7 +73,7 @@ async def on_user_verified(bot: Bot, db: Database, user_id: int) -> None:
     if contest_open and count == required:
         text += "\n\n" + texts.get(db, "ref_pool_joined")
     try:
-        await bot.send_message(referrer_id, text)
+        await send_rich(bot, referrer_id, db, "ref_new", text=text)
     except TelegramAPIError:
         pass
 
@@ -129,25 +131,54 @@ async def _announce(
 
     # Konkurs yakunlandi — foydalanuvchilarga "G'oliblar" tugmasi bor yangi menyu yuboriladi
     admins = config.admin_ids | db.db_admins
-    winner_dm = texts.render(db, "winner_dm", prize=texts.get(db, "prize_text"))
     for uid in winners:
         try:
-            await bot.send_message(uid, winner_dm, reply_markup=main_menu(db, uid in admins))
+            await send_rich(
+                bot, uid, db, "winner_dm", reply_markup=main_menu(db, uid in admins),
+                prize=texts.get(db, "prize_text"),
+            )
         except TelegramAPIError:
             pass
 
+    admin_text, admin_kb = await admin_winners_message(db, contest_id, pool_size)
     for admin_id in admins:
         try:
-            await bot.send_message(
-                admin_id, "🔔 <b>G'oliblar aniqlandi</b>\n\n" + result_text, reply_markup=main_menu(db, True)
-            )
+            await bot.send_message(admin_id, admin_text, reply_markup=admin_kb)
         except TelegramAPIError:
             pass
 
     if db.get_bool("announce_results"):
         await broadcast_text(
-            bot, db, result_text, exclude=set(winners) | admins, reply_markup=main_menu(db, False)
+            bot, db, "winners_header", result_text,
+            exclude=set(winners) | admins, reply_markup=main_menu(db, False),
         )
+
+
+async def admin_winners_message(db: Database, contest_id: int, pool_size: int):
+    """Adminlar uchun: g'oliblarga yozish uchun havola, username va ID bilan."""
+    rows = await db.winners(contest_id)
+    if not rows:
+        return "🔔 <b>G'oliblar aniqlanmadi</b> — qozon bo'sh edi.", None
+    lines = []
+    buttons = []
+    for i, r in enumerate(rows, start=1):
+        name = html.escape(r["full_name"] or str(r["user_id"]))
+        username = r["username"]
+        line = f'{i}. <a href="tg://user?id={r["user_id"]}">{name}</a>'
+        if username:
+            line += f" — @{html.escape(username)}"
+            buttons.append([InlineKeyboardButton(text=f"✍️ {r['full_name'] or username}"[:60], url=f"https://t.me/{username}")])
+        else:
+            line += " — <i>username yo'q</i>"
+        line += f"\n    ID: <code>{r['user_id']}</code>"
+        lines.append(line)
+    text = (
+        "🔔 <b>G'oliblar aniqlandi</b>\n\n" + "\n".join(lines)
+        + f"\n\n🎲 Qozonda: <b>{pool_size}</b> kishi\n\n"
+        "ℹ️ Ism ustiga bosib profilni ochishingiz va yozishingiz mumkin. "
+        "Username bor g'oliblarga quyidagi tugma orqali to'g'ridan-to'g'ri yozasiz."
+    )
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
 
 
 async def scheduler_loop(bot: Bot, db: Database, config: Config, interval: int = 20) -> None:

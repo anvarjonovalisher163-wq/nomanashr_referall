@@ -12,6 +12,7 @@ Majburiy obuna + referal + random qozon + avtomatik g'olib aniqlash + to'liq adm
 5. Belgilangan **sana va vaqtda** bot qozondan `random.SystemRandom` yordamida **n ta g'olibni** (o'rinlarsiz, teng) tanlaydi
    (ixtiyoriy: tanlashda g'olibning hali ham kanallarda ekanligi qayta tekshiriladi).
 6. G'oliblarga, adminlarga va (ixtiyoriy) barcha foydalanuvchilarga natija e'lon qilinadi.
+   Adminlarga g'oliblar profil havolasi, @username va ID bilan, username borlariga «✍️ Yozish» tugmasi bilan keladi.
 
 ## Foydalanuvchi menyusi
 
@@ -47,6 +48,8 @@ Foydalanuvchi har bir yangi do'sti qo'shilganda «Takliflaringiz: 3/5» kabi xab
 - **📝 Bot matnlari** — botdan foydalanuvchiga boradigan **har bir** xabar, menyu tugmasi va oyna matnini
   o'zgartirish yoki standartga qaytarish (start xabari, obuna talabi, taklif xabarlari, natijam, reyting,
   konkurs haqida, g'olib xabari va h.k.). `{name}`, `{count}`, `{required}` kabi o'zgaruvchilar avtomatik almashtiriladi.
+  Alohida xabarlarga (start, obuna talabi, taklif havolasi, konkurs haqida, g'olib xabari, g'oliblar ro'yxati va h.k.)
+  **media** (rasm, video, GIF, audio, fayl) va **tugmalar** (e'londagi formatda) biriktirish, «👁 Ko'rish» bilan sinab ko'rish mumkin.
 - **⚙️ Bot sozlamalari** — botni yoqish/o'chirish (texnik ishlar), g'olib tanlashda obunani qayta tekshirish,
   natijani hammaga e'lon qilish.
 - **👮 Adminlar** — qo'shimcha adminlar qo'shish/o'chirish (faqat `.env` dagi asosiy adminlar).
@@ -86,6 +89,7 @@ bot/
 │   ├── subscription.py    # obunani tekshirish (60 s kesh)
 │   ├── contest.py         # taklifni tasdiqlash, random qozon, g'olib aniqlash, scheduler
 │   ├── broadcast.py       # ommaviy xabar yuborish (rate-limit, RetryAfter, blok)
+│   ├── rich.py            # matnlarni media va tugmalar bilan yuborish
 │   └── buttons.py         # e'lon tugmalarini parse qilish
 └── handlers/
     ├── user.py            # foydalanuvchi menyusi

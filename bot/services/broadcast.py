@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter, Teleg
 
 from bot.db import Database
 from bot.services.buttons import ButtonSpec, build_markup, needs_personal_markup
+from bot.services.rich import send_rich
 
 log = logging.getLogger(__name__)
 
@@ -71,13 +72,14 @@ async def broadcast_copy(
 
 
 async def broadcast_text(
-    bot: Bot, db: Database, text: str, exclude: set[int] | None = None, reply_markup=None
+    bot: Bot, db: Database, key: str, text: str, exclude: set[int] | None = None, reply_markup=None
 ) -> BroadcastResult:
+    """`key` matnining media va tugmalari bilan birga tayyor `text` ni hammaga yuboradi."""
     user_ids = [u for u in await db.all_user_ids() if u not in (exclude or set())]
     result = BroadcastResult(total=len(user_ids))
 
     async def send(uid: int):
-        await bot.send_message(uid, text, reply_markup=reply_markup)
+        await send_rich(bot, uid, db, key, text=text, reply_markup=reply_markup)
 
     for uid in user_ids:
         await _send_one(bot, send, uid, db, result)
