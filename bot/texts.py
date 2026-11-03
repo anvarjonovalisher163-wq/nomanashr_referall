@@ -55,6 +55,12 @@ _DEFS: list[TextDef] = [
         "❗️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling, so'ng «✅ Tekshirish» tugmasini bosing:", rich=True),
     TextDef("sub_alert_required", "Oyna: avval obuna bo'ling", "Avval kanallarga obuna bo'ling!", "alert"),
     TextDef("sub_alert_not_subscribed", "Oyna: obuna to'liq emas", "❌ Siz hali barcha kanallarga obuna bo'lmadingiz!", "alert"),
+    TextDef(
+        "sub_confirmed",
+        "Obuna tasdiqlangandan keyin",
+        "✅ Obuna tasdiqlandi! Endi do'stlaringizni taklif qilib, konkursda ishtirok etishingiz mumkin 👇",
+        rich=True,
+    ),
     TextDef("sub_alert_confirmed", "Oyna: obuna tasdiqlandi", "✅ Rahmat! Obuna tasdiqlandi.", "alert"),
     # ---------------------------------------------------------------- takliflar
     TextDef(

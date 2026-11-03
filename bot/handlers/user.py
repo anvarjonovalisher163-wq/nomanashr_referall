@@ -48,6 +48,11 @@ def contest_state(db: Database) -> str:
 @router.message(CommandStart())
 async def cmd_start(message: Message, bot: Bot, db: Database, is_admin: bool) -> None:
     await send_welcome(bot, message.chat.id, db, is_admin, message.from_user.full_name)
+    if is_admin:
+        # Adminlar bloklanmaydi, lekin foydalanuvchi nimani ko'rishini bilishi uchun kanallar ko'rsatiladi
+        missing = await subscription.unsubscribed_channels(bot, db, message.from_user.id)
+        if missing:
+            await send_rich(bot, message.chat.id, db, "sub_prompt", reply_markup=subscribe_kb(db, missing))
 
 
 @router.callback_query(F.data == "check_sub")
@@ -67,7 +72,7 @@ async def check_sub(call: CallbackQuery, bot: Bot, db: Database, is_admin: bool)
     except Exception:  # noqa: BLE001
         pass
     await on_user_verified(bot, db, call.from_user.id)
-    await send_welcome(bot, call.from_user.id, db, is_admin, call.from_user.full_name)
+    await send_rich(bot, call.from_user.id, db, "sub_confirmed", reply_markup=main_menu(db, is_admin))
 
 
 @router.callback_query(F.data.startswith("alert:"))
