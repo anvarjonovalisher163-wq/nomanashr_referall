@@ -10,6 +10,7 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
+from bot import texts
 from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import AdminStates, IsAdmin, show
@@ -37,7 +38,7 @@ async def _text(db: Database, config: Config) -> str:
         f"🏆 G'oliblar soni: <b>{db.get_int('winners_count')}</b>\n"
         f"📅 G'oliblarni aniqlash sanasi: <b>{draw_at_text(db, config)}</b>\n"
         f"🎲 Random qozonda: <b>{len(pool)}</b> kishi\n\n"
-        f"🎁 Sovg'a matni:\n{db.get('prize_text')}"
+        f"🎁 Sovg'a matni:\n{texts.get(db, 'prize_text')}"
     )
 
 

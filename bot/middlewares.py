@@ -8,6 +8,7 @@ from aiogram.enums import ChatType
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from bot.config import Config
+from bot import texts
 from bot.db import Database
 from bot.keyboards import subscribe_kb
 from bot.services import subscription
@@ -73,9 +74,9 @@ class AccessMiddleware(BaseMiddleware):
 
         # 2) Bot holati
         if not db.get_bool("bot_enabled"):
-            text = "🛠 Bot vaqtincha texnik ishlar sababli to'xtatilgan. Keyinroq urinib ko'ring."
+            text = texts.get(db, "bot_disabled")
             if isinstance(event, CallbackQuery):
-                await event.answer(text, show_alert=True)
+                await event.answer(texts.strip_html(text)[:200], show_alert=True)
             else:
                 await event.answer(text)
             return None
@@ -86,13 +87,13 @@ class AccessMiddleware(BaseMiddleware):
         # 3) Majburiy obuna
         missing = await subscription.unsubscribed_channels(bot, db, user.id)
         if missing:
-            text = "❗️ Botdan foydalanish uchun quyidagi kanallarga obuna bo'ling, so'ng «✅ Tekshirish» tugmasini bosing:"
+            text = texts.get(db, "sub_prompt")
             if isinstance(event, CallbackQuery):
-                await event.answer("Avval kanallarga obuna bo'ling!", show_alert=True)
+                await event.answer(texts.get(db, "sub_alert_required"), show_alert=True)
                 if event.message:
-                    await event.message.answer(text, reply_markup=subscribe_kb(missing))
+                    await event.message.answer(text, reply_markup=subscribe_kb(db, missing))
             else:
-                await event.answer(text, reply_markup=subscribe_kb(missing))
+                await event.answer(text, reply_markup=subscribe_kb(db, missing))
             return None
 
         await on_user_verified(bot, db, user.id)

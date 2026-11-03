@@ -29,14 +29,11 @@ def _mark(value: bool) -> str:
 
 async def render(call: CallbackQuery, db: Database) -> None:
     lines = [f"{_mark(db.get_bool(k))} {label}" for k, label in TOGGLES.items()]
-    text = (
-        "⚙️ <b>Bot sozlamalari</b>\n\n"
-        + "\n".join(lines)
-        + "\n\n👋 <b>Start xabari:</b>\n"
-        + db.get("welcome_text")
+    text = "⚙️ <b>Bot sozlamalari</b>\n\n" + "\n".join(lines) + (
+        "\n\nℹ️ Start xabari va boshqa barcha matnlar «📝 Bot matnlari» bo'limida."
     )
     rows = [[(f"{_mark(db.get_bool(k))} {label}", f"st:t:{k}")] for k, label in TOGGLES.items()]
-    rows.append([("✏️ Start xabarini o'zgartirish", "st:welcome")])
+    rows.append([("📝 Bot matnlari", "adm:texts")])
     rows.append([("⬅️ Orqaga", "adm:main")])
     await show(call, text, ikb(rows))
 
@@ -53,26 +50,6 @@ async def toggle(call: CallbackQuery, db: Database) -> None:
     if key in TOGGLES:
         await db.set(key, not db.get_bool(key))
     await render(call, db)
-
-
-@router.callback_query(F.data == "st:welcome")
-async def ask_welcome(call: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(AdminStates.set_welcome)
-    await show(
-        call,
-        "✏️ Yangi start xabarini yuboring.\n\n"
-        "<code>{name}</code> — foydalanuvchi ismi bilan almashtiriladi. Qalin/kursiv va havolalar saqlanadi.",
-        cancel_kb(),
-    )
-
-
-@router.message(AdminStates.set_welcome, F.text)
-async def set_welcome(message: Message, state: FSMContext, db: Database) -> None:
-    await db.set("welcome_text", message.html_text)
-    await state.clear()
-    await message.answer(
-        "✅ Start xabari saqlandi.", reply_markup=ikb([[("⚙️ Sozlamalar", "adm:settings"), ("🏠 Panel", "adm:main")]])
-    )
 
 
 # -------------------------------------------------------------------------- adminlar

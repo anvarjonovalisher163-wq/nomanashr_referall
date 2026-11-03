@@ -24,7 +24,7 @@ class AdminStates(StatesGroup):
     set_winners = State()
     set_date = State()
     set_prize = State()
-    set_welcome = State()
+    edit_text = State()
 
 
 async def show(call: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None = None) -> None:

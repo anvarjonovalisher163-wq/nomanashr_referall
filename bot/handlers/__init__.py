@@ -2,6 +2,7 @@ from aiogram import Router
 
 from bot.handlers import user
 from bot.handlers.admin import broadcast, channels, contest, panel, settings
+from bot.handlers.admin import texts as admin_texts
 
 
 def setup_routers() -> Router:
@@ -13,6 +14,7 @@ def setup_routers() -> Router:
         channels.router,
         contest.router,
         settings.router,
+        admin_texts.router,
         user.router,
     )
     return root

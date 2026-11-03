@@ -9,7 +9,7 @@ Majburiy obuna + referal + random qozon + avtomatik g'olib aniqlash + to'liq adm
 3. Do'sti shu havola orqali botga **birinchi marta** kirib, barcha kanallarga obuna bo'lgandagina
    taklif **tasdiqlanadi** (soxta takliflarning oldi olinadi). Taklif qiluvchiga xabar boradi.
 4. **N ta** tasdiqlangan do'st taklif qilgan foydalanuvchi avtomatik ravishda **random qozonga** qo'shiladi.
-5. Belgilangan **sana va vaqtda** bot qozondan `random.SystemRandom` yordamida **n ta g'olibni** tanlaydi
+5. Belgilangan **sana va vaqtda** bot qozondan `random.SystemRandom` yordamida **n ta g'olibni** (o'rinlarsiz, teng) tanlaydi
    (ixtiyoriy: tanlashda g'olibning hali ham kanallarda ekanligi qayta tekshiriladi).
 6. G'oliblarga, adminlarga va (ixtiyoriy) barcha foydalanuvchilarga natija e'lon qilinadi.
 
@@ -44,8 +44,11 @@ Majburiy obuna + referal + random qozon + avtomatik g'olib aniqlash + to'liq adm
   qozon ro'yxatini CSV yuklab olish, g'oliblarni hozir aniqlash, yangi konkurs boshlash (hisoblar 0 dan).
 - **📡 Majburiy kanallar** — qo'shish (`@username`, `-100...` ID, yoki forward), o'chirish.
   Yopiq kanal uchun: `-1001234567890 https://t.me/+AbCdEf`. Bot kanalda **admin** bo'lishi shart.
+- **📝 Bot matnlari** — botdan foydalanuvchiga boradigan **har bir** xabar, menyu tugmasi va oyna matnini
+  o'zgartirish yoki standartga qaytarish (start xabari, obuna talabi, taklif xabarlari, natijam, reyting,
+  konkurs haqida, g'olib xabari va h.k.). `{name}`, `{count}`, `{required}` kabi o'zgaruvchilar avtomatik almashtiriladi.
 - **⚙️ Bot sozlamalari** — botni yoqish/o'chirish (texnik ishlar), g'olib tanlashda obunani qayta tekshirish,
-  natijani hammaga e'lon qilish, start xabarini tahrirlash (`{name}` — foydalanuvchi ismi).
+  natijani hammaga e'lon qilish.
 - **👮 Adminlar** — qo'shimcha adminlar qo'shish/o'chirish (faqat `.env` dagi asosiy adminlar).
 
 ## O'rnatish
@@ -77,6 +80,7 @@ bot/
 ├── config.py              # .env sozlamalari
 ├── db.py                  # SQLite (aiosqlite): users, referrals, winners, channels, admins, settings, alerts
 ├── keyboards.py           # klaviaturalar
+├── texts.py               # foydalanuvchiga boradigan barcha matnlar (admin paneldan tahrirlanadi)
 ├── middlewares.py         # ro'yxatga olish + referal, bot holati, majburiy obuna
 ├── services/
 │   ├── subscription.py    # obunani tekshirish (60 s kesh)
@@ -85,7 +89,7 @@ bot/
 │   └── buttons.py         # e'lon tugmalarini parse qilish
 └── handlers/
     ├── user.py            # foydalanuvchi menyusi
-    └── admin/             # panel, broadcast, channels, contest, settings (+ adminlar)
+    └── admin/             # panel, broadcast, channels, contest, texts, settings (+ adminlar)
 ```
 
 - **Random qozon** alohida jadvalda saqlanmaydi — u `referrals` jadvalidan dinamik hisoblanadi

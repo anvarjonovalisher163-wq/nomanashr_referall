@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import IsAdmin, show
-from bot.keyboards import Btn, admin_main_kb, back_kb
+from bot.keyboards import ADMIN_BUTTON, admin_main_kb, back_kb
 from bot.services.contest import draw_at_text
 
 router = Router(name="admin_panel")
@@ -20,7 +20,7 @@ PANEL_TEXT = "⚙️ <b>Admin panel</b>\n\nKerakli bo'limni tanlang:"
 
 
 @router.message(Command("admin"))
-@router.message(F.text == Btn.ADMIN)
+@router.message(F.text == ADMIN_BUTTON)
 async def open_panel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(PANEL_TEXT, reply_markup=admin_main_kb())

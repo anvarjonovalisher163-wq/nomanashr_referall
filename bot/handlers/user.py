@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import html
+from typing import Any
 
 from aiogram import Bot, F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Filter
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from bot import texts
 from bot.config import Config
 from bot.db import Database
-from bot.keyboards import Btn, main_menu, subscribe_kb
+from bot.keyboards import main_menu, subscribe_kb
 from bot.services import subscription
 from bot.services.buttons import ref_link, share_url
 from bot.services.contest import draw_at_text, on_user_verified, user_mention, winners_text
@@ -17,9 +19,30 @@ from bot.services.contest import draw_at_text, on_user_verified, user_mention, w
 router = Router(name="user")
 
 
+class MenuButton(Filter):
+    """Menyu tugmasini admin o'zgartirgan joriy yozuvi (yoki standart yozuvi) bo'yicha taniydi."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+
+    async def __call__(self, message: Message, db: Database, **_: Any) -> bool:
+        return message.text is not None and message.text in (
+            texts.get(db, self.key),
+            texts.TEXTS[self.key].default,
+        )
+
+
 async def send_welcome(message: Message, db: Database, is_admin: bool, name: str) -> None:
-    text = db.get("welcome_text").replace("{name}", html.escape(name))
-    await message.answer(text, reply_markup=main_menu(is_admin))
+    text = texts.render(db, "welcome_text", name=html.escape(name))
+    await message.answer(text, reply_markup=main_menu(db, is_admin))
+
+
+def contest_state(db: Database) -> str:
+    if db.get_bool("contest_drawn"):
+        return texts.get(db, "state_drawn")
+    if db.get_bool("contest_active"):
+        return texts.get(db, "state_active")
+    return texts.get(db, "state_inactive")
 
 
 @router.message(CommandStart())
@@ -32,13 +55,13 @@ async def check_sub(call: CallbackQuery, bot: Bot, db: Database, is_admin: bool)
     subscription.invalidate(call.from_user.id)
     missing = await subscription.unsubscribed_channels(bot, db, call.from_user.id, use_cache=False)
     if missing:
-        await call.answer("❌ Siz hali barcha kanallarga obuna bo'lmadingiz!", show_alert=True)
+        await call.answer(texts.get(db, "sub_alert_not_subscribed"), show_alert=True)
         try:
-            await call.message.edit_reply_markup(reply_markup=subscribe_kb(missing))
+            await call.message.edit_reply_markup(reply_markup=subscribe_kb(db, missing))
         except Exception:  # noqa: BLE001 — klaviatura o'zgarmagan bo'lishi mumkin
             pass
         return
-    await call.answer("✅ Rahmat! Obuna tasdiqlandi.")
+    await call.answer(texts.get(db, "sub_alert_confirmed"))
     try:
         await call.message.delete()
     except Exception:  # noqa: BLE001
@@ -54,82 +77,82 @@ async def alert_button(call: CallbackQuery, db: Database) -> None:
     await call.answer(text or "—", show_alert=True)
 
 
-@router.message(F.text == Btn.REF)
+@router.message(MenuButton("btn_ref"))
 async def my_link(message: Message, db: Database, bot_username: str) -> None:
     link = ref_link(bot_username, message.from_user.id)
-    required = db.get_int("required_refs")
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(
-                text="📤 Do'stlarga ulashish",
-                url=share_url(link, "Konkursda ishtirok et va sovg'a yut! 🎁"),
+                text=texts.get(db, "btn_share"),
+                url=share_url(link, texts.get(db, "share_text")),
             )
         ]]
     )
     await message.answer(
-        f"🔗 <b>Sizning shaxsiy taklif havolangiz:</b>\n<code>{link}</code>\n\n"
-        f"Havolani do'stlaringizga yuboring. <b>{required}</b> ta do'stingiz botga kirib, "
-        f"majburiy kanallarga obuna bo'lsa — siz random qozonga qo'shilasiz! 🎲",
+        texts.render(db, "ref_link_text", link=link, required=db.get_int("required_refs")),
         reply_markup=kb,
     )
 
 
-@router.message(F.text == Btn.STATS)
+@router.message(MenuButton("btn_stats"))
 async def my_stats(message: Message, db: Database, config: Config) -> None:
     count = await db.ref_count(message.from_user.id)
     required = db.get_int("required_refs")
     if db.get_bool("contest_drawn"):
-        status = "🏁 Konkurs yakunlangan"
+        status = texts.get(db, "status_drawn")
     elif not db.get_bool("contest_active"):
-        status = "⏸ Konkurs hozircha faol emas"
+        status = texts.get(db, "status_inactive")
     elif count >= required:
-        status = "✅ Siz random qozondasiz!"
+        status = texts.get(db, "status_in_pool")
     else:
-        status = f"⏳ Qozonga kirish uchun yana <b>{required - count}</b> ta do'st taklif qiling"
+        status = texts.render(db, "status_need", left=required - count)
     await message.answer(
-        f"📊 <b>Sizning natijangiz</b>\n\n"
-        f"👥 Tasdiqlangan takliflar: <b>{count}</b> / {required}\n"
-        f"{status}\n\n"
-        f"📅 G'oliblar aniqlanadigan sana: <b>{draw_at_text(db, config)}</b>"
+        texts.render(
+            db, "stats_text", count=count, required=required, status=status, date=draw_at_text(db, config)
+        )
     )
 
 
-@router.message(F.text == Btn.TOP)
+@router.message(MenuButton("btn_top"))
 async def top(message: Message, db: Database) -> None:
     rows = await db.top(db.contest_id, 10)
     if not rows:
-        await message.answer("🏆 Hozircha reyting bo'sh. Birinchi bo'ling! 🚀")
+        await message.answer(texts.get(db, "top_empty"))
         return
     lines = [
-        f"{i}. {user_mention(r['user_id'], r['full_name'])} — <b>{r['cnt']}</b> ta"
+        texts.render(db, "top_line", n=i, user=user_mention(r["user_id"], r["full_name"]), count=r["cnt"])
         for i, r in enumerate(rows, start=1)
     ]
     my = await db.ref_count(message.from_user.id)
     await message.answer(
-        "🏆 <b>Eng faol ishtirokchilar (TOP-10):</b>\n\n" + "\n".join(lines) + f"\n\nSizda: <b>{my}</b> ta"
+        texts.get(db, "top_header") + "\n\n" + "\n".join(lines) + "\n\n" + texts.render(db, "top_footer", count=my)
     )
 
 
-@router.message(F.text == Btn.ABOUT)
+@router.message(MenuButton("btn_about"))
 async def about(message: Message, db: Database, config: Config) -> None:
-    state = "🟢 Faol" if db.get_bool("contest_active") else (
-        "🏁 Yakunlangan" if db.get_bool("contest_drawn") else "⏸ Faol emas"
-    )
     await message.answer(
-        f"ℹ️ <b>Konkurs haqida</b>\n\n"
-        f"Holat: {state}\n"
-        f"👥 Qozonga kirish sharti: <b>{db.get_int('required_refs')}</b> ta do'st taklif qilish\n"
-        f"🏆 G'oliblar soni: <b>{db.get_int('winners_count')}</b> ta\n"
-        f"📅 G'oliblar aniqlanadigan sana: <b>{draw_at_text(db, config)}</b>\n\n"
-        f"{db.get('prize_text')}\n\n"
-        f"❗️ Taklif qilingan do'st botga birinchi marta kirgan va barcha majburiy kanallarga "
-        f"obuna bo'lgan bo'lishi kerak."
+        texts.render(
+            db,
+            "about_text",
+            status=contest_state(db),
+            required=db.get_int("required_refs"),
+            winners=db.get_int("winners_count"),
+            date=draw_at_text(db, config),
+            prize=texts.get(db, "prize_text"),
+        )
     )
 
 
-@router.message(F.text == Btn.WINNERS)
+@router.message(MenuButton("btn_winners"))
 async def winners(message: Message, db: Database) -> None:
     if not db.get_bool("contest_drawn"):
-        await message.answer("⏳ G'oliblar hali aniqlanmagan.")
+        await message.answer(texts.get(db, "winners_not_yet"))
         return
     await message.answer(await winners_text(db, db.contest_id))
+
+
+@router.message()
+async def fallback(message: Message, db: Database, is_admin: bool) -> None:
+    """Noma'lum xabar: menyuni (yangilangan tugma yozuvlari bilan) qayta yuboradi."""
+    await message.answer(texts.get(db, "menu_hint"), reply_markup=main_menu(db, is_admin))

@@ -66,13 +66,6 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "required_refs": "5",
     "winners_count": "3",
     "draw_at": "",
-    "prize_text": "🎁 Sovg'alar haqida ma'lumot tez orada e'lon qilinadi.",
-    "welcome_text": (
-        "👋 Assalomu alaykum, {name}!\n\n"
-        "Do'stlaringizni taklif qiling va konkursda ishtirok eting. "
-        "Belgilangan miqdordagi do'stni taklif qilganlar random qozonga qo'shiladi, "
-        "g'oliblar esa belgilangan sanada tasodifiy tanlanadi. 🍀"
-    ),
     "bot_enabled": "1",
     "check_sub_on_draw": "1",
     "announce_results": "1",
@@ -160,6 +153,11 @@ class Database:
         )
         await self.conn.commit()
         self._settings[key] = value
+
+    async def delete_setting(self, key: str) -> None:
+        await self.conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+        await self.conn.commit()
+        self._settings.pop(key, None)
 
     @property
     def contest_id(self) -> int:

@@ -10,6 +10,7 @@ from datetime import datetime
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
+from bot import texts
 from bot.config import Config
 from bot.db import Database
 from bot.services import subscription
@@ -44,7 +45,7 @@ def draw_at(db: Database, config: Config) -> datetime | None:
 
 def draw_at_text(db: Database, config: Config) -> str:
     dt = draw_at(db, config)
-    return dt.strftime("%d.%m.%Y %H:%M") if dt else "belgilanmagan"
+    return dt.strftime("%d.%m.%Y %H:%M") if dt else html.escape(texts.get(db, "date_not_set"))
 
 
 def user_mention(user_id: int, full_name: str | None, username: str | None = None) -> str:
@@ -65,12 +66,9 @@ async def on_user_verified(bot: Bot, db: Database, user_id: int) -> None:
     user = await db.get_user(user_id)
     name = html.escape(user.full_name) if user else str(user_id)
 
-    text = f"🎉 Sizning havolangiz orqali <b>{name}</b> botga qo'shildi!\n👥 Takliflaringiz: <b>{count}/{required}</b>"
+    text = texts.render(db, "ref_new", name=name, count=count, required=required)
     if contest_open and count == required:
-        text += (
-            "\n\n✅ Tabriklaymiz! Siz <b>random qozonga</b> qo'shildingiz. "
-            "G'oliblar belgilangan sanada tasodifiy tanlanadi. 🍀"
-        )
+        text += "\n\n" + texts.get(db, "ref_pool_joined")
     try:
         await bot.send_message(referrer_id, text)
     except TelegramAPIError:
@@ -114,28 +112,24 @@ async def run_draw(bot: Bot, db: Database, config: Config) -> list[int] | None:
 async def winners_text(db: Database, contest_id: int) -> str:
     rows = await db.winners(contest_id)
     if not rows:
-        return "😔 Qozonda ishtirokchilar bo'lmagani sababli g'oliblar aniqlanmadi."
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        return texts.get(db, "winners_none")
     lines = [
-        f"{medals.get(r['place'], str(r['place']) + '.')} {user_mention(r['user_id'], r['full_name'], r['username'])}"
+        texts.render(db, "winner_line", user=user_mention(r["user_id"], r["full_name"], r["username"]))
         for r in rows
     ]
-    return "🏆 <b>Konkurs g'oliblari:</b>\n\n" + "\n".join(lines)
+    return texts.get(db, "winners_header") + "\n\n" + "\n".join(lines)
 
 
 async def _announce(
     bot: Bot, db: Database, config: Config, contest_id: int, pool_size: int, winners: list[int]
 ) -> None:
     result_text = await winners_text(db, contest_id)
-    result_text += f"\n\n🎲 Random qozondagi ishtirokchilar: <b>{pool_size}</b> ta"
+    result_text += "\n\n" + texts.render(db, "results_footer", pool=pool_size)
 
-    for place, uid in enumerate(winners, start=1):
+    winner_dm = texts.render(db, "winner_dm", prize=texts.get(db, "prize_text"))
+    for uid in winners:
         try:
-            await bot.send_message(
-                uid,
-                f"🎉 <b>Tabriklaymiz!</b> Siz konkursda <b>{place}-o'rin</b> g'olibi bo'ldingiz!\n\n"
-                f"{db.get('prize_text')}\n\nTez orada admin siz bilan bog'lanadi.",
-            )
+            await bot.send_message(uid, winner_dm)
         except TelegramAPIError:
             pass
 
