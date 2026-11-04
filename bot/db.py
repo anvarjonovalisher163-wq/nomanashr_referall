@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
@@ -113,6 +113,13 @@ class Database:
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.executescript(SCHEMA)
+        # Migratsiya: oxirgi faollik vaqti (eski bazalarda bu ustun yo'q)
+        async with self._conn.execute("PRAGMA table_info(users)") as cur:
+            columns = {row[1] async for row in cur}
+        if "last_seen" not in columns:
+            await self._conn.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
+            await self._conn.execute("UPDATE users SET last_seen = created_at")
+        await self._conn.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users (last_seen)")
         for key, value in DEFAULT_SETTINGS.items():
             await self._conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value)
@@ -201,9 +208,9 @@ class Database:
     ) -> bool:
         """Yangi foydalanuvchini qo'shadi. Yangi bo'lsa True qaytaradi."""
         cur = await self.conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, full_name, username, referrer_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (user_id, full_name, username, referrer_id, now_iso()),
+            "INSERT OR IGNORE INTO users (user_id, full_name, username, referrer_id, created_at, last_seen) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, full_name, username, referrer_id, now_iso(), now_iso()),
         )
         created = cur.rowcount > 0
         if created and referrer_id:
@@ -222,6 +229,11 @@ class Database:
         )
         await self.conn.commit()
 
+    async def touch(self, user_id: int) -> None:
+        """Foydalanuvchining oxirgi faollik vaqtini yangilaydi."""
+        await self.conn.execute("UPDATE users SET last_seen = ? WHERE user_id = ?", (now_iso(), user_id))
+        await self.conn.commit()
+
     async def set_blocked(self, user_id: int, blocked: bool = True) -> None:
         await self.conn.execute(
             "UPDATE users SET is_blocked = ? WHERE user_id = ?", (int(blocked), user_id)
@@ -238,7 +250,7 @@ class Database:
     async def export_users(self) -> list[aiosqlite.Row]:
         """Barcha foydalanuvchilar: kim taklif qilgan va joriy konkursdagi takliflar soni bilan."""
         async with self.conn.execute(
-            "SELECT u.user_id, u.full_name, u.username, u.created_at, u.is_blocked, "
+            "SELECT u.user_id, u.full_name, u.username, u.created_at, u.last_seen, u.is_blocked, "
             "u.referrer_id, r.full_name AS referrer_name, r.username AS referrer_username, "
             "(SELECT COUNT(*) FROM referrals x WHERE x.referrer_id = u.user_id "
             " AND x.contest_id = ? AND x.confirmed = 1) AS refs "
@@ -254,12 +266,18 @@ class Database:
             return int(row[0] or 0)
 
         today = datetime.now(timezone.utc).date().isoformat()
+
+        def ago(days: int) -> str:
+            return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
         cid = self.contest_id
         return {
             "users": await scalar("SELECT COUNT(*) FROM users"),
             "active": await scalar("SELECT COUNT(*) FROM users WHERE is_blocked = 0"),
             "blocked": await scalar("SELECT COUNT(*) FROM users WHERE is_blocked = 1"),
             "today": await scalar("SELECT COUNT(*) FROM users WHERE created_at >= ?", today),
+            "dau": await scalar("SELECT COUNT(*) FROM users WHERE last_seen >= ?", ago(1)),
+            "wau": await scalar("SELECT COUNT(*) FROM users WHERE last_seen >= ?", ago(7)),
+            "mau": await scalar("SELECT COUNT(*) FROM users WHERE last_seen >= ?", ago(30)),
             "refs_total": await scalar(
                 "SELECT COUNT(*) FROM referrals WHERE contest_id = ? AND confirmed = 1", cid
             ),

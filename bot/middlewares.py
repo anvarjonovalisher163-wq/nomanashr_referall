@@ -1,6 +1,7 @@
 """Foydalanuvchini ro'yxatga olish, bot holati va majburiy obunani tekshirish."""
 from __future__ import annotations
 
+import time
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware, Bot
@@ -14,6 +15,9 @@ from bot.keyboards import subscribe_kb
 from bot.services import notifier, subscription
 from bot.services.contest import on_user_verified
 from bot.services.rich import send_rich
+
+_TOUCH_EVERY = 3600  # soniya
+_last_touch: dict[int, float] = {}
 
 # Obuna tekshiruvisiz ishlaydigan callbacklar
 _FREE_CALLBACKS = ("check_sub", "alert:")
@@ -65,8 +69,14 @@ class AccessMiddleware(BaseMiddleware):
                     referrer_id = None
             if await db.add_user(user.id, user.full_name, user.username, referrer_id):
                 await notifier.push(db, config, user.id, user.full_name, user.username, referrer_id)
-        elif existing.full_name != user.full_name or existing.username != user.username or existing.is_blocked:
-            await db.update_user(user.id, user.full_name, user.username)
+        else:
+            if existing.full_name != user.full_name or existing.username != user.username or existing.is_blocked:
+                await db.update_user(user.id, user.full_name, user.username)
+            # Oxirgi faollik — bazaga ko'pi bilan soatiga bir marta yoziladi
+            now = time.monotonic()
+            if now - _last_touch.get(user.id, -_TOUCH_EVERY) >= _TOUCH_EVERY:
+                _last_touch[user.id] = now
+                await db.touch(user.id)
 
         is_admin = user.id in config.admin_ids or user.id in db.db_admins
         data["is_admin"] = is_admin

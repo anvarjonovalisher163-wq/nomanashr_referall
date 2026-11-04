@@ -62,6 +62,10 @@ async def stats(call: CallbackQuery, db: Database, config: Config) -> None:
         f"✅ Faol: <b>{s['active']}</b>\n"
         f"🚫 Botni bloklagan: <b>{s['blocked']}</b>\n"
         f"🆕 Bugun qo'shilgan: <b>{s['today']}</b>\n\n"
+        f"🔥 <b>Faol foydalanuvchilar</b> (botdan foydalanganlar):\n"
+        f"• Oxirgi 24 soat: <b>{s['dau']}</b>\n"
+        f"• Oxirgi 7 kun: <b>{s['wau']}</b>\n"
+        f"• Oxirgi 30 kun (oylik): <b>{s['mau']}</b>\n\n"
         f"🎯 <b>Konkurs #{db.contest_id}</b> — {state}\n"
         f"👥 Tasdiqlangan takliflar: <b>{s['refs_total']}</b>\n"
         f"⏳ Obunani kutayotgan takliflar: <b>{s['refs_pending']}</b>\n"
@@ -72,6 +76,13 @@ async def stats(call: CallbackQuery, db: Database, config: Config) -> None:
     await show(call, text, back_kb())
 
 
+def _local(value: str | None, config: Config) -> str:
+    try:
+        return datetime.fromisoformat(value).astimezone(config.tz).strftime("%d.%m.%Y %H:%M")
+    except (TypeError, ValueError):
+        return value or ""
+
+
 @router.callback_query(F.data == "adm:export")
 async def export_users(call: CallbackQuery, db: Database, config: Config) -> None:
     await call.answer("⏳ Fayl tayyorlanmoqda...")
@@ -80,7 +91,7 @@ async def export_users(call: CallbackQuery, db: Database, config: Config) -> Non
     writer = csv.writer(buffer, delimiter=";")  # ";" — Excel'da ustunlar to'g'ri ajraladi
     writer.writerow([
         "ID", "Ism", "Username", "Qo'shilgan vaqt", "Taklif qilgan (ID)", "Taklif qilgan (ism)",
-        "Taklif qilgan (username)", "Takliflari soni", "Botni bloklagan",
+        "Taklif qilgan (username)", "Takliflari soni", "Botni bloklagan", "Oxirgi faollik",
     ])
     for r in rows:
         try:
@@ -91,7 +102,7 @@ async def export_users(call: CallbackQuery, db: Database, config: Config) -> Non
             r["user_id"], r["full_name"] or "", f"@{r['username']}" if r["username"] else "", joined,
             r["referrer_id"] or "", r["referrer_name"] or "",
             f"@{r['referrer_username']}" if r["referrer_username"] else "",
-            r["refs"], "ha" if r["is_blocked"] else "yo'q",
+            r["refs"], "ha" if r["is_blocked"] else "yo'q", _local(r["last_seen"], config),
         ])
     data = buffer.getvalue().encode("utf-8-sig")
     await call.message.answer_document(
