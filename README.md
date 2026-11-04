@@ -28,6 +28,10 @@ Foydalanuvchi har bir yangi do'sti qo'shilganda «Takliflaringiz: 3/5» kabi xab
 ## Admin panel (`/admin` yoki «⚙️ Admin panel»)
 
 - **📊 Statistika** — foydalanuvchilar, bloklaganlar, bugungi yangi, takliflar, qozon hajmi.
+- **📥 Foydalanuvchilar (Excel)** — barcha foydalanuvchilar ro'yxati (ID, ism, username, qo'shilgan vaqt,
+  kim taklif qilgan, takliflar soni) CSV faylda; Excel yoki Google Sheets'da ochiladi.
+- **🆕 Yangi foydalanuvchilar haqida xabar** — har 10 soniyada yangi qo'shilganlar ro'yxati adminlarga yoki
+  sozlamalarda ulangan log kanalga yuboriladi.
 - **📢 E'lon yuborish** — istalgan turdagi xabar (matn, rasm, video, fayl, ovoz, so'rovnoma...),
   ostiga **har xil tugmalar** qo'shish, oldindan ko'rish va tasdiqlash. Yuborish fon rejimida, ~25 xabar/s,
   botni bloklaganlar avtomatik belgilanadi.

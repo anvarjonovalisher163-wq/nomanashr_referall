@@ -68,6 +68,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "draw_at": "",
     "bot_enabled": "1",
     "check_sub_on_draw": "1",
+    "notify_new_users": "1",
+    "log_chat_id": "",
     # 0 — do'st havola orqali botga kirishi bilan taklif sanaladi; 1 — kanallarga obuna bo'lgach
     "ref_requires_sub": "0",
     "announce_results": "1",
@@ -232,6 +234,18 @@ class Database:
             sql += " WHERE is_blocked = 0"
         async with self.conn.execute(sql) as cur:
             return [row["user_id"] async for row in cur]
+
+    async def export_users(self) -> list[aiosqlite.Row]:
+        """Barcha foydalanuvchilar: kim taklif qilgan va joriy konkursdagi takliflar soni bilan."""
+        async with self.conn.execute(
+            "SELECT u.user_id, u.full_name, u.username, u.created_at, u.is_blocked, "
+            "u.referrer_id, r.full_name AS referrer_name, r.username AS referrer_username, "
+            "(SELECT COUNT(*) FROM referrals x WHERE x.referrer_id = u.user_id "
+            " AND x.contest_id = ? AND x.confirmed = 1) AS refs "
+            "FROM users u LEFT JOIN users r ON r.user_id = u.referrer_id ORDER BY u.created_at",
+            (self.contest_id,),
+        ) as cur:
+            return await cur.fetchall()
 
     async def stats(self) -> dict[str, int]:
         async def scalar(sql: str, *args) -> int:

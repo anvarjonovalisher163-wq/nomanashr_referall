@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import html
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -21,6 +22,7 @@ TOGGLES = {
     "ref_requires_sub": "👥 Taklif qilingan do'st ham kanallarga obuna bo'lishi shart",
     "check_sub_on_draw": "🔎 G'olibni tanlashda obunani qayta tekshirish",
     "announce_results": "📣 Natijalarni barcha foydalanuvchilarga e'lon qilish",
+    "notify_new_users": "🆕 Har bir yangi foydalanuvchi haqida xabar",
 }
 
 
@@ -34,6 +36,10 @@ async def render(call: CallbackQuery, db: Database) -> None:
         "\n\nℹ️ Start xabari va boshqa barcha matnlar «📝 Bot matnlari» bo'limida."
     )
     rows = [[(f"{_mark(db.get_bool(k))} {label}", f"st:t:{k}")] for k, label in TOGGLES.items()]
+    log_chat = db.get("log_chat_id")
+    rows.append([(f"📋 Log kanal: {log_chat or 'yo‘q (adminlarga)'}", "st:log")])
+    if log_chat:
+        rows.append([("🗑 Log kanalni o'chirish", "st:log_del")])
     rows.append([("📝 Bot matnlari", "adm:texts")])
     rows.append([("⬅️ Orqaga", "adm:main")])
     await show(call, text, ikb(rows))
@@ -50,6 +56,49 @@ async def toggle(call: CallbackQuery, db: Database) -> None:
     key = call.data.split(":", 2)[2]
     if key in TOGGLES:
         await db.set(key, not db.get_bool(key))
+    await render(call, db)
+
+
+@router.callback_query(F.data == "st:log")
+async def ask_log_chat(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(AdminStates.set_log_chat)
+    await show(
+        call,
+        "📋 <b>Log kanal</b>\n\n"
+        "Yangi foydalanuvchilar haqidagi xabarlar shu kanal/guruhga boradi (ko'p odam qo'shilganda "
+        "shaxsiy chatingiz to'lib ketmasligi uchun).\n\n"
+        "1. Yopiq kanal yoki guruh yarating va botni u yerga <b>admin</b> qiling.\n"
+        "2. Kanaldan istalgan postni shu yerga <b>forward</b> qiling yoki ID sini (<code>-100...</code>) yuboring.",
+        cancel_kb(),
+    )
+
+
+@router.message(AdminStates.set_log_chat)
+async def set_log_chat(message: Message, state: FSMContext, db: Database, bot: Bot) -> None:
+    origin_chat = getattr(message.forward_origin, "chat", None) if message.forward_origin else None
+    raw = str(origin_chat.id) if origin_chat else (message.text or "").strip()
+    if not raw.lstrip("-").isdigit() and not raw.startswith("@"):
+        await message.answer("⚠️ Kanal ID sini yuboring yoki postini forward qiling.", reply_markup=cancel_kb())
+        return
+    try:
+        sent = await bot.send_message(int(raw) if raw.lstrip("-").isdigit() else raw, "✅ Log kanal ulandi.")
+    except TelegramAPIError as exc:
+        await message.answer(
+            f"⚠️ Bot bu chatga yoza olmadi — botni admin qiling.\n<code>{html.escape(str(exc))}</code>",
+            reply_markup=cancel_kb(),
+        )
+        return
+    await db.set("log_chat_id", sent.chat.id)
+    await state.clear()
+    await message.answer(
+        f"✅ Log kanal saqlandi: <code>{sent.chat.id}</code>",
+        reply_markup=ikb([[("⚙️ Sozlamalar", "adm:settings"), ("🏠 Panel", "adm:main")]]),
+    )
+
+
+@router.callback_query(F.data == "st:log_del")
+async def delete_log_chat(call: CallbackQuery, db: Database) -> None:
+    await db.set("log_chat_id", "")
     await render(call, db)
 
 

@@ -26,6 +26,7 @@ class AdminStates(StatesGroup):
     set_prize = State()
     edit_text = State()
     edit_buttons = State()
+    set_log_chat = State()
 
 
 async def show(call: CallbackQuery, text: str, kb: InlineKeyboardMarkup | None = None) -> None:

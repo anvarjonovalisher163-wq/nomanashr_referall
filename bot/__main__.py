@@ -16,6 +16,7 @@ from bot.handlers import setup_routers
 from bot.middlewares import AccessMiddleware
 from bot.services import rich
 from bot.services.contest import scheduler_loop
+from bot.services.notifier import notifier_loop
 
 
 async def main() -> None:
@@ -43,12 +44,14 @@ async def main() -> None:
     await bot.set_my_commands([BotCommand(command="start", description="Botni ishga tushirish")])
 
     scheduler = asyncio.create_task(scheduler_loop(bot, db, config))
+    notifier = asyncio.create_task(notifier_loop(bot, db, config))
     logging.info("Bot ishga tushdi: @%s", me.username)
     try:
         await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         scheduler.cancel()
+        notifier.cancel()
         await db.close()
         await bot.session.close()
 

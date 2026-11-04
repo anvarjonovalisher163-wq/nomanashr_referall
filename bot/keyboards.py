@@ -47,7 +47,8 @@ def admin_main_kb() -> InlineKeyboardMarkup:
             [("📊 Statistika", "adm:stats"), ("📢 E'lon yuborish", "adm:broadcast")],
             [("🎯 Konkurs", "adm:contest"), ("📡 Majburiy kanallar", "adm:channels")],
             [("📝 Bot matnlari", "adm:texts"), ("⚙️ Bot sozlamalari", "adm:settings")],
-            [("👮 Adminlar", "adm:admins"), ("❌ Yopish", "adm:close")],
+            [("📥 Foydalanuvchilar (Excel)", "adm:export"), ("👮 Adminlar", "adm:admins")],
+            [("❌ Yopish", "adm:close")],
         ]
     )
 
