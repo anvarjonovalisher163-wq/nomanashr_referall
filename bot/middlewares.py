@@ -11,7 +11,7 @@ from bot.config import Config
 from bot import texts
 from bot.db import Database
 from bot.keyboards import subscribe_kb
-from bot.services import subscription
+from bot.services import notifier, subscription
 from bot.services.contest import on_user_verified
 from bot.services.rich import send_rich
 
@@ -63,7 +63,8 @@ class AccessMiddleware(BaseMiddleware):
                 referrer_id = _parse_referrer(event.text, user.id)
                 if referrer_id and not await db.get_user(referrer_id):
                     referrer_id = None
-            await db.add_user(user.id, user.full_name, user.username, referrer_id)
+            if await db.add_user(user.id, user.full_name, user.username, referrer_id):
+                await notifier.push(db, config, user.id, user.full_name, user.username, referrer_id)
         elif existing.full_name != user.full_name or existing.username != user.username or existing.is_blocked:
             await db.update_user(user.id, user.full_name, user.username)
 
