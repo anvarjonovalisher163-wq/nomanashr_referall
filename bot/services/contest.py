@@ -105,6 +105,7 @@ async def run_draw(bot: Bot, db: Database, config: Config) -> list[int] | None:
 
         await db.save_winners(contest_id, winners)
         await db.set("contest_drawn", True)
+        await db.set("last_pool_size", len(candidates))
         await db.set("contest_active", False)
 
     log.info("Konkurs #%s yakunlandi. Qozonda: %s, g'oliblar: %s", contest_id, len(candidates), winners)
@@ -126,8 +127,7 @@ async def winners_text(db: Database, contest_id: int) -> str:
 async def _announce(
     bot: Bot, db: Database, config: Config, contest_id: int, pool_size: int, winners: list[int]
 ) -> None:
-    result_text = await winners_text(db, contest_id)
-    result_text += "\n\n" + texts.render(db, "results_footer", pool=pool_size)
+    result_text = await results_text(db, contest_id, pool_size)
 
     # Konkurs yakunlandi — foydalanuvchilarga "G'oliblar" tugmasi bor yangi menyu yuboriladi
     admins = config.admin_ids | db.db_admins
@@ -178,7 +178,15 @@ async def admin_winners_message(db: Database, contest_id: int, pool_size: int):
         "ℹ️ Ism ustiga bosib profilni ochishingiz va yozishingiz mumkin. "
         "Username bor g'oliblarga quyidagi tugma orqali to'g'ridan-to'g'ri yozasiz."
     )
-    return text, InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+    buttons.append([InlineKeyboardButton(text="📢 Kanalga e'lon qilish", callback_data="ct:post")])
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def results_text(db: Database, contest_id: int, pool_size: int | None = None) -> str:
+    """G'oliblar ro'yxati + qozondagilar soni (foydalanuvchilar va kanal uchun)."""
+    if pool_size is None:
+        pool_size = db.get_int("last_pool_size")
+    return await winners_text(db, contest_id) + "\n\n" + texts.render(db, "results_footer", pool=pool_size)
 
 
 async def scheduler_loop(bot: Bot, db: Database, config: Config, interval: int = 20) -> None:

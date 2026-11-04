@@ -6,7 +6,10 @@ import csv
 import io
 from datetime import datetime
 
+import html
+
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -15,7 +18,8 @@ from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import AdminStates, IsAdmin, show
 from bot.keyboards import cancel_kb, ikb
-from bot.services.contest import DATE_FORMAT, admin_winners_message, draw_at_text, parse_date, run_draw
+from bot.services.rich import send_rich
+from bot.services.contest import DATE_FORMAT, admin_winners_message, results_text, draw_at_text, parse_date, run_draw
 
 router = Router(name="admin_contest")
 router.message.filter(IsAdmin())
@@ -55,7 +59,7 @@ def _kb(db: Database):
         [("📥 Qozon ro'yxati (CSV)", "ct:export")],
     ]
     if db.get_bool("contest_drawn"):
-        rows.append([("🏆 G'oliblar", "ct:winners")])
+        rows.append([("🏆 G'oliblar", "ct:winners"), ("📢 Kanalga e'lon qilish", "ct:post")])
     else:
         rows.append([("🎲 Hozir g'oliblarni aniqlash", "ct:draw")])
     rows.append([("🔄 Yangi konkurs boshlash", "ct:new")])
@@ -228,3 +232,68 @@ async def new_contest(call: CallbackQuery, db: Database, config: Config) -> None
     await db.set("draw_at", "")
     await call.answer("Yangi konkurs yaratildi. Sanani belgilab, «Boshlash» ni bosing.", show_alert=True)
     await render(call, db, config)
+
+
+# ----------------------------------------------------------------- kanalga e'lon qilish
+@router.callback_query(F.data == "ct:post")
+async def post_choose(call: CallbackQuery, db: Database, state: FSMContext) -> None:
+    if not db.get_bool("contest_drawn"):
+        await call.answer("G'oliblar hali aniqlanmagan.", show_alert=True)
+        return
+    await state.set_state(AdminStates.post_chat)
+    rows = [[(f"📢 {ch.title[:40]}", f"ct:pv:{ch.chat_id}")] for ch in await db.channels()]
+    rows.append([("❌ Bekor qilish", "adm:cancel")])
+    await show(
+        call,
+        "📢 <b>G'oliblarni kanalga e'lon qilish</b>\n\n"
+        "Kanalni tanlang yoki boshqa kanaldan postni <b>forward</b> qiling / ID sini (<code>-100...</code>) "
+        "yoki <code>@username</code> ni yuboring. Bot o'sha kanalda admin bo'lishi kerak.\n\n"
+        "ℹ️ Post matni, rasmi va tugmalari «📝 Bot matnlari → G'oliblar sarlavhasi / G'olib qatori / "
+        "Natija oxiri» dan olinadi.",
+        ikb(rows),
+    )
+
+
+async def _preview(bot: Bot, admin_id: int, db: Database, chat_ref: str) -> None:
+    await bot.send_message(admin_id, "👁 <b>Kanalda shunday ko'rinadi:</b>")
+    await send_rich(bot, admin_id, db, "winners_header", text=await results_text(db, db.contest_id))
+    await bot.send_message(
+        admin_id,
+        f"Shu post <code>{html.escape(chat_ref)}</code> ga joylansinmi?",
+        reply_markup=ikb([[("✅ Joylash", f"ct:po:{chat_ref}"), ("❌ Bekor qilish", "adm:cancel")]]),
+    )
+
+
+@router.callback_query(F.data.startswith("ct:pv:"))
+async def post_preview(call: CallbackQuery, bot: Bot, db: Database) -> None:
+    await call.answer()
+    await _preview(bot, call.from_user.id, db, call.data.split(":", 2)[2])
+
+
+@router.message(AdminStates.post_chat)
+async def post_chat_input(message: Message, bot: Bot, db: Database) -> None:
+    origin_chat = getattr(message.forward_origin, "chat", None) if message.forward_origin else None
+    raw = str(origin_chat.id) if origin_chat else (message.text or "").strip()
+    if raw.startswith("https://t.me/") and "+" not in raw:
+        raw = "@" + raw.removeprefix("https://t.me/").strip("/")
+    if not (raw.lstrip("-").isdigit() or raw.startswith("@")) or len(raw) > 50:
+        await message.answer("⚠️ Kanal ID si, @username yoki forward qilingan post yuboring.", reply_markup=cancel_kb())
+        return
+    await _preview(bot, message.from_user.id, db, raw)
+
+
+@router.callback_query(F.data.startswith("ct:po:"))
+async def post_publish(call: CallbackQuery, bot: Bot, db: Database, state: FSMContext) -> None:
+    raw = call.data.split(":", 2)[2]
+    chat: int | str = int(raw) if raw.lstrip("-").isdigit() else raw
+    try:
+        await send_rich(bot, chat, db, "winners_header", text=await results_text(db, db.contest_id))
+    except TelegramAPIError as exc:
+        await call.answer()
+        await call.message.answer(
+            f"⚠️ Joylab bo'lmadi — bot kanalda admin va post yozish huquqiga ega ekanini tekshiring.\n"
+            f"<code>{html.escape(str(exc))}</code>"
+        )
+        return
+    await state.clear()
+    await show(call, "✅ G'oliblar kanalga e'lon qilindi!", ikb([[("🎯 Konkurs", "adm:contest")]]))
