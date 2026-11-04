@@ -104,7 +104,11 @@ async def got_channel(message: Message, state: FSMContext, bot: Bot, db: Databas
             )
             return
 
-    await db.add_channel(chat.id, chat.title or str(chat.id), link)
+    try:
+        base_count = await bot.get_chat_member_count(chat.id)
+    except TelegramAPIError:
+        base_count = None
+    await db.add_channel(chat.id, chat.title or str(chat.id), link, base_count)
     await state.clear()
     await message.answer(
         f"✅ <b>{html.escape(chat.title or '')}</b> majburiy kanallarga qo'shildi.",

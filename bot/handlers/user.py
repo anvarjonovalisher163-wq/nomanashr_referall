@@ -61,6 +61,8 @@ async def cmd_start(message: Message, bot: Bot, db: Database, is_admin: bool) ->
 async def check_sub(call: CallbackQuery, bot: Bot, db: Database, is_admin: bool) -> None:
     subscription.invalidate(call.from_user.id)
     missing = await subscription.unsubscribed_channels(bot, db, call.from_user.id, use_cache=False)
+    if not is_admin:
+        await db.track_subscriptions(call.from_user.id, {ch.chat_id for ch in missing})
     if missing:
         await call.answer(texts.get(db, "sub_alert_not_subscribed"), show_alert=True)
         try:

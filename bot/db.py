@@ -52,6 +52,22 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+-- Bot "obuna bo'ling" deb so'ragan, lekin hali obuna bo'lmagan foydalanuvchilar
+CREATE TABLE IF NOT EXISTS sub_pending (
+    user_id INTEGER NOT NULL,
+    chat_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, chat_id)
+);
+
+-- Bot orqali kanalga obuna bo'lganlar
+CREATE TABLE IF NOT EXISTS channel_joins (
+    user_id   INTEGER NOT NULL,
+    chat_id   INTEGER NOT NULL,
+    joined_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, chat_id)
+);
+CREATE INDEX IF NOT EXISTS idx_joins_chat ON channel_joins (chat_id, joined_at);
+
 -- E'lon ostidagi "alert" tugmalari matni (callback_data 64 baytdan oshmasligi uchun).
 CREATE TABLE IF NOT EXISTS alerts (
     id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,6 +136,11 @@ class Database:
             await self._conn.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
             await self._conn.execute("UPDATE users SET last_seen = created_at")
         await self._conn.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users (last_seen)")
+        async with self._conn.execute("PRAGMA table_info(channels)") as cur:
+            columns = {row[1] async for row in cur}
+        if "base_count" not in columns:
+            # Kanal botga qo'shilgan paytdagi obunachilar soni
+            await self._conn.execute("ALTER TABLE channels ADD COLUMN base_count INTEGER")
         for key, value in DEFAULT_SETTINGS.items():
             await self._conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value)
@@ -370,14 +391,57 @@ class Database:
                 async for row in cur
             ]
 
-    async def add_channel(self, chat_id: int, title: str, invite_link: str) -> None:
+    async def add_channel(
+        self, chat_id: int, title: str, invite_link: str, base_count: int | None = None
+    ) -> None:
         await self.conn.execute(
-            "INSERT INTO channels (chat_id, title, invite_link) VALUES (?, ?, ?) "
+            "INSERT INTO channels (chat_id, title, invite_link, base_count) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(chat_id) DO UPDATE SET title = excluded.title, "
-            "invite_link = excluded.invite_link",
-            (chat_id, title, invite_link),
+            "invite_link = excluded.invite_link, base_count = COALESCE(channels.base_count, excluded.base_count)",
+            (chat_id, title, invite_link, base_count),
         )
         await self.conn.commit()
+
+    async def channel_base_counts(self) -> dict[int, int | None]:
+        async with self.conn.execute("SELECT chat_id, base_count FROM channels") as cur:
+            return {row[0]: row[1] async for row in cur}
+
+    async def set_channel_base(self, chat_id: int, count: int) -> None:
+        await self.conn.execute(
+            "UPDATE channels SET base_count = ? WHERE chat_id = ? AND base_count IS NULL", (count, chat_id)
+        )
+        await self.conn.commit()
+
+    async def track_subscriptions(self, user_id: int, missing: set[int]) -> None:
+        """Bot so'ragan kanallardan qaysilariga foydalanuvchi obuna bo'lganini yozib boradi."""
+        async with self.conn.execute("SELECT chat_id FROM sub_pending WHERE user_id = ?", (user_id,)) as cur:
+            pending = {row[0] async for row in cur}
+        joined = pending - missing
+        new_pending = missing - pending
+        if not joined and not new_pending:
+            return
+        now = now_iso()
+        for chat_id in joined:
+            await self.conn.execute(
+                "INSERT OR IGNORE INTO channel_joins (user_id, chat_id, joined_at) VALUES (?, ?, ?)",
+                (user_id, chat_id, now),
+            )
+            await self.conn.execute(
+                "DELETE FROM sub_pending WHERE user_id = ? AND chat_id = ?", (user_id, chat_id)
+            )
+        for chat_id in new_pending:
+            await self.conn.execute(
+                "INSERT OR IGNORE INTO sub_pending (user_id, chat_id) VALUES (?, ?)", (user_id, chat_id)
+            )
+        await self.conn.commit()
+
+    async def join_stats(self) -> dict[int, tuple[int, int]]:
+        """chat_id -> (bot orqali jami obuna bo'lganlar, shundan bugun)."""
+        today = datetime.now(timezone.utc).date().isoformat()
+        async with self.conn.execute(
+            "SELECT chat_id, COUNT(*), SUM(joined_at >= ?) FROM channel_joins GROUP BY chat_id", (today,)
+        ) as cur:
+            return {row[0]: (row[1], row[2] or 0) async for row in cur}
 
     async def remove_channel(self, channel_id: int) -> None:
         await self.conn.execute("DELETE FROM channels WHERE id = ?", (channel_id,))

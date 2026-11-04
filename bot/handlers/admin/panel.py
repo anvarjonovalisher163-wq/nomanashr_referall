@@ -1,7 +1,10 @@
 """Admin panel: bosh menyu va statistika."""
 from __future__ import annotations
 
-from aiogram import F, Router
+import html
+
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 import csv
@@ -49,10 +52,36 @@ async def close(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+async def channels_stats(bot: Bot, db: Database) -> str:
+    channels = await db.channels()
+    if not channels:
+        return "📡 Majburiy kanallar: <b>yo'q</b>"
+    joins = await db.join_stats()
+    bases = await db.channel_base_counts()
+    lines = [f"📡 <b>Majburiy kanallar</b> ({len(channels)} ta):"]
+    for ch in channels:
+        try:
+            members = await bot.get_chat_member_count(ch.chat_id)
+        except TelegramAPIError:
+            members = None
+        base = bases.get(ch.chat_id)
+        if base is None and members is not None:
+            # Eski kanallar uchun hisob shu paytdan boshlanadi
+            await db.set_channel_base(ch.chat_id, members)
+            base = members
+        total, today = joins.get(ch.chat_id, (0, 0))
+        line = f"\n<b>{html.escape(ch.title)}</b>\n"
+        line += f"• Obunachilar: <b>{members if members is not None else '?'}</b>"
+        if members is not None and base is not None:
+            line += f" ({members - base:+d} hisob boshlangandan beri)"
+        line += f"\n• Bot orqali obuna bo'ldi: <b>{total}</b> (bugun: {today})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 @router.callback_query(F.data == "adm:stats")
-async def stats(call: CallbackQuery, db: Database, config: Config) -> None:
+async def stats(call: CallbackQuery, bot: Bot, db: Database, config: Config) -> None:
     s = await db.stats()
-    channels = len(await db.channels())
     state = "🟢 Faol" if db.get_bool("contest_active") else (
         "🏁 Yakunlangan" if db.get_bool("contest_drawn") else "⏸ To'xtatilgan"
     )
@@ -71,7 +100,7 @@ async def stats(call: CallbackQuery, db: Database, config: Config) -> None:
         f"⏳ Obunani kutayotgan takliflar: <b>{s['refs_pending']}</b>\n"
         f"🎲 Random qozonda: <b>{s['pool']}</b> kishi\n"
         f"📅 G'oliblar sanasi: <b>{draw_at_text(db, config)}</b>\n\n"
-        f"📡 Majburiy kanallar: <b>{channels}</b> ta"
+        + await channels_stats(bot, db)
     )
     await show(call, text, back_kb())
 

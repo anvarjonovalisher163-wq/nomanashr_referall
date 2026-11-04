@@ -100,6 +100,7 @@ class AccessMiddleware(BaseMiddleware):
 
         # 3) Majburiy obuna
         missing = await subscription.unsubscribed_channels(bot, db, user.id)
+        await db.track_subscriptions(user.id, {ch.chat_id for ch in missing})
         if missing:
             if isinstance(event, CallbackQuery):
                 await event.answer(texts.get(db, "sub_alert_required"), show_alert=True)
