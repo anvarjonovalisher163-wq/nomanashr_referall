@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.db import Database
 from bot.handlers.admin.common import AdminStates, IsAdmin, show
 from bot.keyboards import cancel_kb, ikb
+from bot.services import subscription
 from bot.services.broadcast import BroadcastResult, broadcast_copy
 from bot.services.buttons import ButtonParseError, ButtonSpec, build_markup, parse_buttons
 
@@ -83,13 +84,13 @@ async def got_buttons(message: Message, state: FSMContext, db: Database, bot: Bo
         await message.answer(f"⚠️ {exc}\n\nQaytadan yuboring.", reply_markup=cancel_kb())
         return
     await state.update_data(buttons=[[asdict(b) for b in row] for row in rows])
-    await _preview(message.chat.id, state, bot, bot_username)
+    await _preview(message.chat.id, state, bot, bot_username, db)
 
 
 @router.callback_query(AdminStates.broadcast_buttons, F.data == "bc:preview")
-async def preview_no_buttons(call: CallbackQuery, state: FSMContext, bot: Bot, bot_username: str) -> None:
+async def preview_no_buttons(call: CallbackQuery, state: FSMContext, bot: Bot, bot_username: str, db: Database) -> None:
     await call.answer()
-    await _preview(call.message.chat.id, state, bot, bot_username)
+    await _preview(call.message.chat.id, state, bot, bot_username, db)
 
 
 def _restore(data: dict) -> list[list[ButtonSpec]] | None:
@@ -97,7 +98,7 @@ def _restore(data: dict) -> list[list[ButtonSpec]] | None:
     return [[ButtonSpec(**b) for b in row] for row in raw] if raw else None
 
 
-async def _preview(chat_id: int, state: FSMContext, bot: Bot, bot_username: str) -> None:
+async def _preview(chat_id: int, state: FSMContext, bot: Bot, bot_username: str, db: Database) -> None:
     data = await state.get_data()
     buttons = _restore(data)
     await bot.send_message(chat_id, "👁 <b>Ko'rinishi:</b>")
@@ -106,20 +107,61 @@ async def _preview(chat_id: int, state: FSMContext, bot: Bot, bot_username: str)
         reply_markup=build_markup(buttons, bot_username, chat_id),
     )
     await state.set_state(AdminStates.broadcast_confirm)
-    await bot.send_message(
-        chat_id,
-        "Barcha foydalanuvchilarga yuborilsinmi?",
-        reply_markup=ikb([[("✅ Yuborish", "bc:send"), ("❌ Bekor qilish", "adm:cancel")]]),
+    await bot.send_message(chat_id, await _audience_text(db), reply_markup=await _audience_kb(db))
+
+
+SEGMENTS = {
+    "all": "👥 Hammaga",
+    "unsub": "📡 Kanallarga obuna bo'lmaganlar",
+    "noref": "🙋 Obuna bo'lgan, hech kimni taklif qilmagan",
+    "partial": "⏳ Taklif qilgan, lekin {n} taga yetmagan",
+    "pool": "🎲 Random qozondagilar",
+}
+
+
+def _segment_label(db: Database, key: str) -> str:
+    return SEGMENTS[key].replace("{n}", str(db.get_int("required_refs")))
+
+
+async def _audience_kb(db: Database):
+    rows = []
+    for key in SEGMENTS:
+        count = len(await db.segment_user_ids(key))
+        suffix = f" (~{count})" if key == "unsub" else f" ({count})"
+        rows.append([(_segment_label(db, key) + suffix, f"bc:send:{key}")])
+    rows.append([("❌ Bekor qilish", "adm:cancel")])
+    return ikb(rows)
+
+
+async def _audience_text(db: Database) -> str:
+    return (
+        "🎯 <b>Kimga yuborilsin?</b>\n\n"
+        "Varonkada qayerda qolganiga qarab tanlang. Qavs ichida — shu guruhdagi odamlar soni.\n\n"
+        "ℹ️ «Kanallarga obuna bo'lmaganlar» guruhida har bir odamning obunasi yuborishdan oldin qayta "
+        "tekshiriladi — obuna bo'lib bo'lganlarga xabar bormaydi."
     )
 
 
-@router.callback_query(AdminStates.broadcast_confirm, F.data == "bc:send")
+@router.callback_query(AdminStates.broadcast_confirm, F.data.startswith("bc:send:"))
 async def send(call: CallbackQuery, state: FSMContext, bot: Bot, db: Database, bot_username: str) -> None:
+    segment = call.data.split(":", 2)[2]
+    if segment not in SEGMENTS:
+        return
     data = await state.get_data()
     await state.clear()
     buttons = _restore(data)
-    total = len(await db.all_user_ids())
-    await show(call, f"🚀 E'lon yuborish boshlandi... (<b>{total}</b> ta foydalanuvchi)")
+    user_ids = await db.segment_user_ids(segment)
+
+    async def still_unsubscribed(uid: int) -> bool:
+        missing = await subscription.unsubscribed_channels(bot, db, uid, use_cache=False)
+        await db.set_sub_ok(uid, not missing)
+        return bool(missing)
+
+    should_send = still_unsubscribed if segment == "unsub" else None
+    await show(
+        call,
+        f"🚀 E'lon yuborish boshlandi: {_segment_label(db, segment)} (<b>{len(user_ids)}</b> ta foydalanuvchi)",
+    )
     status = call.message
 
     async def progress(result: BroadcastResult, done: int) -> None:
@@ -134,7 +176,8 @@ async def send(call: CallbackQuery, state: FSMContext, bot: Bot, db: Database, b
     async def runner() -> None:
         try:
             result = await broadcast_copy(
-                bot, db, data["chat_id"], data["message_id"], buttons, bot_username, progress
+                bot, db, data["chat_id"], data["message_id"], buttons, bot_username, progress,
+                user_ids=user_ids, should_send=should_send,
             )
         except Exception:  # noqa: BLE001
             log.exception("E'lon yuborishda xato")
@@ -146,7 +189,8 @@ async def send(call: CallbackQuery, state: FSMContext, bot: Bot, db: Database, b
             f"👥 Jami: {result.total}\n"
             f"✅ Yetkazildi: {result.sent}\n"
             f"🚫 Botni bloklagan: {result.blocked}\n"
-            f"⚠️ Xatolik: {result.failed}",
+            f"⚠️ Xatolik: {result.failed}"
+            + (f"\n⏭ O'tkazib yuborildi (allaqachon obuna): {result.skipped}" if result.skipped else ""),
         )
 
     # Uzoq jarayon — fon rejimida, bot boshqa so'rovlarga javob berishda davom etadi.

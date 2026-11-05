@@ -26,6 +26,7 @@ async def main() -> None:
     config = load_config()
     db = Database(config.db_path)
     await db.connect()
+    db.super_admins = set(config.admin_ids)
 
     bot = Bot(config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     me = await bot.get_me()

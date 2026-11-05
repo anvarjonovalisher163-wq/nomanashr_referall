@@ -23,6 +23,7 @@ class BroadcastResult:
     sent: int = 0
     failed: int = 0
     blocked: int = 0
+    skipped: int = 0
 
 
 async def _send_one(bot: Bot, send, user_id: int, db: Database, result: BroadcastResult) -> None:
@@ -52,9 +53,15 @@ async def broadcast_copy(
     buttons: list[list[ButtonSpec]] | None,
     bot_username: str,
     progress=None,
+    user_ids: list[int] | None = None,
+    should_send=None,
 ) -> BroadcastResult:
-    """Admin yuborgan xabarni (har qanday turdagi) barcha foydalanuvchilarga nusxalaydi."""
-    user_ids = await db.all_user_ids()
+    """Admin yuborgan xabarni (har qanday turdagi) foydalanuvchilarga nusxalaydi.
+
+    `user_ids` berilmasa — hammaga. `should_send(uid)` False qaytarsa, o'sha foydalanuvchi o'tkazib yuboriladi.
+    """
+    if user_ids is None:
+        user_ids = await db.all_user_ids()
     result = BroadcastResult(total=len(user_ids))
     personal = needs_personal_markup(buttons or [])
     common_markup = None if personal else build_markup(buttons, bot_username)
@@ -64,8 +71,11 @@ async def broadcast_copy(
         await bot.copy_message(uid, from_chat_id, message_id, reply_markup=markup)
 
     for index, uid in enumerate(user_ids, start=1):
-        await _send_one(bot, send, uid, db, result)
-        await asyncio.sleep(SEND_DELAY)
+        if should_send is not None and not await should_send(uid):
+            result.skipped += 1
+        else:
+            await _send_one(bot, send, uid, db, result)
+            await asyncio.sleep(SEND_DELAY)
         if progress and index % 200 == 0:
             await progress(result, index)
     return result

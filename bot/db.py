@@ -119,6 +119,8 @@ class Database:
         self._conn: aiosqlite.Connection | None = None
         self._settings: dict[str, str] = {}
         self._admins: set[int] = set()
+        self._sub_ok: dict[int, bool] = {}
+        self.super_admins: set[int] = set()  # .env dagi adminlar (ishga tushganda o'rnatiladi)
 
     # ------------------------------------------------------------------ setup
     async def connect(self) -> None:
@@ -136,6 +138,9 @@ class Database:
             await self._conn.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
             await self._conn.execute("UPDATE users SET last_seen = created_at")
         await self._conn.execute("CREATE INDEX IF NOT EXISTS idx_users_last_seen ON users (last_seen)")
+        if "sub_ok" not in columns:
+            # 1 — barcha kanallarga obuna, 0 — obuna emas, NULL — noma'lum (eski foydalanuvchilar)
+            await self._conn.execute("ALTER TABLE users ADD COLUMN sub_ok INTEGER")
         async with self._conn.execute("PRAGMA table_info(channels)") as cur:
             columns = {row[1] async for row in cur}
         if "base_count" not in columns:
@@ -280,6 +285,46 @@ class Database:
         ) as cur:
             return await cur.fetchall()
 
+    async def segment_user_ids(self, segment: str) -> list[int]:
+        """Varonka bo'yicha foydalanuvchilar guruhi (faqat botni bloklamaganlar).
+
+        all     — hammasi
+        unsub   — kanallarga obuna bo'lmagan yoki holati noma'lum (yuborishda qayta tekshiriladi)
+        noref   — obuna bo'lgan, lekin hech kimni taklif qilmagan
+        partial — taklif qilgan, lekin N ga yetmagan
+        pool    — N ga yetgan (random qozonda)
+        """
+        refs = (
+            "(SELECT COUNT(*) FROM referrals x WHERE x.referrer_id = u.user_id "
+            "AND x.contest_id = ? AND x.confirmed = 1)"
+        )
+        required = max(self.get_int("required_refs"), 1)
+        queries = {
+            "all": ("SELECT user_id FROM users u WHERE is_blocked = 0", ()),
+            "unsub": ("SELECT user_id FROM users u WHERE is_blocked = 0 AND (sub_ok IS NULL OR sub_ok = 0)", ()),
+            "noref": (
+                f"SELECT user_id FROM users u WHERE is_blocked = 0 AND sub_ok = 1 AND {refs} = 0",
+                (self.contest_id,),
+            ),
+            "partial": (
+                f"SELECT user_id FROM users u WHERE is_blocked = 0 AND {refs} BETWEEN 1 AND ?",
+                (self.contest_id, required - 1),
+            ),
+            "pool": (
+                f"SELECT user_id FROM users u WHERE is_blocked = 0 AND {refs} >= ?",
+                (self.contest_id, required),
+            ),
+        }
+        sql, args = queries[segment]
+        async with self.conn.execute(sql, args) as cur:
+            ids = [row[0] async for row in cur]
+        if segment == "unsub" and not await self.channels():
+            return []
+        if segment == "all":
+            return ids
+        admins = self._admins | self.super_admins
+        return [uid for uid in ids if uid not in admins]
+
     async def stats(self) -> dict[str, int]:
         async def scalar(sql: str, *args) -> int:
             async with self.conn.execute(sql, args) as cur:
@@ -412,8 +457,16 @@ class Database:
         )
         await self.conn.commit()
 
+    async def set_sub_ok(self, user_id: int, ok: bool) -> None:
+        if self._sub_ok.get(user_id) == ok:
+            return
+        self._sub_ok[user_id] = ok
+        await self.conn.execute("UPDATE users SET sub_ok = ? WHERE user_id = ?", (int(ok), user_id))
+        await self.conn.commit()
+
     async def track_subscriptions(self, user_id: int, missing: set[int]) -> None:
         """Bot so'ragan kanallardan qaysilariga foydalanuvchi obuna bo'lganini yozib boradi."""
+        await self.set_sub_ok(user_id, not missing)
         async with self.conn.execute("SELECT chat_id FROM sub_pending WHERE user_id = ?", (user_id,)) as cur:
             pending = {row[0] async for row in cur}
         joined = pending - missing
