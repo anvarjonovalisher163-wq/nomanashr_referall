@@ -17,6 +17,7 @@ from bot.middlewares import AccessMiddleware
 from bot.services import rich
 from bot.services.contest import scheduler_loop
 from bot.services.notifier import notifier_loop
+from bot.services.export import export_loop
 
 
 async def main() -> None:
@@ -46,6 +47,7 @@ async def main() -> None:
 
     scheduler = asyncio.create_task(scheduler_loop(bot, db, config))
     notifier = asyncio.create_task(notifier_loop(bot, db, config))
+    exporter = asyncio.create_task(export_loop(bot, db, config))
     logging.info("Bot ishga tushdi: @%s", me.username)
     try:
         await bot.delete_webhook(drop_pending_updates=False)
@@ -53,6 +55,7 @@ async def main() -> None:
     finally:
         scheduler.cancel()
         notifier.cancel()
+        exporter.cancel()
         await db.close()
         await bot.session.close()
 

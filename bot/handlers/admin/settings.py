@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import AdminStates, IsAdmin, show
+from bot.services.export import INTERVAL_CHOICES, interval_label
 from bot.keyboards import cancel_kb, ikb
 
 router = Router(name="admin_settings")
@@ -40,6 +41,7 @@ async def render(call: CallbackQuery, db: Database) -> None:
     rows.append([(f"📋 Log kanal: {log_chat or 'yo‘q (adminlarga)'}", "st:log")])
     if log_chat:
         rows.append([("🗑 Log kanalni o'chirish", "st:log_del")])
+    rows.append([(f"📥 Excel avtomatik: {interval_label(db.get_int('export_interval'))}", "st:exp")])
     rows.append([("📝 Bot matnlari", "adm:texts")])
     rows.append([("⬅️ Orqaga", "adm:main")])
     await show(call, text, ikb(rows))
@@ -57,6 +59,39 @@ async def toggle(call: CallbackQuery, db: Database) -> None:
     if key in TOGGLES:
         await db.set(key, not db.get_bool(key))
     await render(call, db)
+
+
+@router.callback_query(F.data == "st:exp")
+async def export_menu(call: CallbackQuery, db: Database) -> None:
+    current = db.get_int("export_interval")
+    rows, row = [], []
+    for minutes in INTERVAL_CHOICES:
+        mark = "✅ " if minutes == current else ""
+        row.append((mark + interval_label(minutes), f"st:exp:{minutes}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    rows.append([("⬅️ Orqaga", "adm:settings")])
+    target = "log kanalga" if db.get("log_chat_id") else "asosiy adminlarga (log kanal ulanmagan)"
+    await show(
+        call,
+        "📥 <b>Foydalanuvchilar ro'yxatini avtomatik yuborish</b>\n\n"
+        f"Hozir: <b>{interval_label(current)}</b>\n"
+        f"Fayl {target} yuboriladi.\n\nQanchalik tez-tez yuborilsin?",
+        ikb(rows),
+    )
+
+
+@router.callback_query(F.data.startswith("st:exp:"))
+async def export_set(call: CallbackQuery, db: Database) -> None:
+    minutes = int(call.data.split(":")[2])
+    if minutes in INTERVAL_CHOICES:
+        await db.set("export_interval", minutes)
+        await db.set("export_last_at", "")  # yangi oraliq darhol (1 daqiqa ichida) kuchga kiradi
+        await call.answer(f"✅ {interval_label(minutes).capitalize()}")
+    await export_menu(call, db)
 
 
 @router.callback_query(F.data == "st:log")

@@ -86,6 +86,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "check_sub_on_draw": "1",
     "notify_new_users": "1",
     "log_chat_id": "",
+    "export_interval": "30",  # daqiqa; 0 — avtomatik eksport o'chiq
+    "export_last_at": "",
     # 0 — do'st havola orqali botga kirishi bilan taklif sanaladi; 1 — kanallarga obuna bo'lgach
     "ref_requires_sub": "0",
     "announce_results": "1",

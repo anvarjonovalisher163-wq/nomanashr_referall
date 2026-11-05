@@ -7,17 +7,15 @@ from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-import csv
-import io
-from datetime import datetime
 
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message
 
 from bot.config import Config
 from bot.db import Database
 from bot.handlers.admin.common import IsAdmin, show
 from bot.keyboards import ADMIN_BUTTON, admin_main_kb, back_kb
 from bot.services.contest import draw_at_text
+from bot.services.export import build_users_file
 
 router = Router(name="admin_panel")
 router.message.filter(IsAdmin())
@@ -105,37 +103,12 @@ async def stats(call: CallbackQuery, bot: Bot, db: Database, config: Config) -> 
     await show(call, text, back_kb())
 
 
-def _local(value: str | None, config: Config) -> str:
-    try:
-        return datetime.fromisoformat(value).astimezone(config.tz).strftime("%d.%m.%Y %H:%M")
-    except (TypeError, ValueError):
-        return value or ""
-
-
 @router.callback_query(F.data == "adm:export")
 async def export_users(call: CallbackQuery, db: Database, config: Config) -> None:
     await call.answer("⏳ Fayl tayyorlanmoqda...")
-    rows = await db.export_users()
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=";")  # ";" — Excel'da ustunlar to'g'ri ajraladi
-    writer.writerow([
-        "ID", "Ism", "Username", "Qo'shilgan vaqt", "Taklif qilgan (ID)", "Taklif qilgan (ism)",
-        "Taklif qilgan (username)", "Takliflari soni", "Botni bloklagan", "Oxirgi faollik",
-    ])
-    for r in rows:
-        try:
-            joined = datetime.fromisoformat(r["created_at"]).astimezone(config.tz).strftime("%d.%m.%Y %H:%M")
-        except (TypeError, ValueError):
-            joined = r["created_at"] or ""
-        writer.writerow([
-            r["user_id"], r["full_name"] or "", f"@{r['username']}" if r["username"] else "", joined,
-            r["referrer_id"] or "", r["referrer_name"] or "",
-            f"@{r['referrer_username']}" if r["referrer_username"] else "",
-            r["refs"], "ha" if r["is_blocked"] else "yo'q", _local(r["last_seen"], config),
-        ])
-    data = buffer.getvalue().encode("utf-8-sig")
+    file, total = await build_users_file(db, config)
     await call.message.answer_document(
-        BufferedInputFile(data, filename=f"foydalanuvchilar_{datetime.now(config.tz):%Y-%m-%d_%H-%M}.csv"),
-        caption=f"👥 Jami: {len(rows)} ta foydalanuvchi\n\nExcel'da yoki Google Sheets'da "
+        file,
+        caption=f"👥 Jami: {total} ta foydalanuvchi\n\nExcel'da yoki Google Sheets'da "
         "(Fayl → Import → Yuklash) ochiladi.",
     )
